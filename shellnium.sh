@@ -54,8 +54,6 @@ find_element() {
     $POST -d '{"using":"'$property'", "value": "'$value'"}' ${BASE_URL}/element | jq -r '.value.ELEMENT'
 }
 
-# []のリスト型で渡すこと
-# \nでENTERの効果がある
 send_keys() {
     local elementId=$1
     local value=$2
