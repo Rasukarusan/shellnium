@@ -7,7 +7,6 @@ main() {
 
     # 検索ボックスの要素を取得
     local searchBox=$(find_element 'name' 'q')
-    echo "要素ID: $searchBox"
 
     # 検索ボックスに入力＆検索実行
     send_keys $searchBox "タピオカ\n"
