@@ -21,3 +21,7 @@ main() {
 
 main
 ```
+
+## Article
+
+https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
