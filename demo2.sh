@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+options=",\"chromeOptions\": { \"args\": [\"--headless\"] }"
+source ./selenium.sh
 
 main() {
     screen_clear
@@ -22,55 +24,7 @@ main() {
         exec_sync_script "window.scroll(0,$i)"
         set_background_image
     done
-}
-
-ROOT=http://localhost:9515
-POST='curl -s -X POST -H "Content-Type: application/json"'
-PATH_SCREENSHOT=$(pwd)/image.jpg
-
-get_session_id() {
-    $POST -d '{
-        "desiredCapabilities": {
-            "browserName": "chrome",
-            "chromeOptions": {
-                "args": ["--headless"]
-            }
-        }
-    }' \
-    ${ROOT}/session| jq -r '.sessionId'
-}
-
-SESSION_ID=$(get_session_id)
-BASE_URL=${ROOT}/session/${SESSION_ID}
-
-navigate_to() {
-    local url=$1
-    $POST -d '{"url":"'${url}'"}' ${BASE_URL}/url >/dev/null
-}
-
-find_element() {
-    local property=$1
-    local value=$2
-    $POST -d '{"using":"'$property'", "value": "'$value'"}' ${BASE_URL}/element | jq -r '.value.ELEMENT'
-}
-
-send_keys() {
-    local elementId=$1
-    local value=$2
-    $POST -d '{"value": ["'$value'"]}' ${BASE_URL}/element/${elementId}/value >/dev/null
-}
-
-click() {
-    local elementId=$1
-    $POST ${BASE_URL}/element/${elementId}/click >/dev/null
-}
-
-screenshot() {
-    curl -s -X GET ${BASE_URL}/screenshot | jq -r '.value' | base64 -d > $PATH_SCREENSHOT
-}
-
-exec_sync_script() {
-    $POST -d '{"script": "'$1'", "args":['"$2"']}' ${BASE_URL}/execute/sync >/dev/null
+    screen_clear
 }
 
 iterm_set_background_image() {
@@ -86,8 +40,9 @@ EOF
 }
 
 set_background_image() {
-    screenshot
-    iterm_set_background_image $PATH_SCREENSHOT
+    local screenshotPath=$(pwd)/image.jpg
+    screenshot $screenshotPath
+    iterm_set_background_image $screenshotPath
 }
 
 screen_clear() {
