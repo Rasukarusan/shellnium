@@ -22,6 +22,20 @@ main() {
 main
 ```
 
+## Demo
+
+```sh
+$ sh demo.sh
+
+# or
+$ sh demo2.sh
+```
+
+`demo2.sh` is required iTerm2 and MacOS.
+
+This script is headless and display chromedriver's behavior as iTerm's background.  
+The above GIF is `demo2.sh`.
+
 ## Article
 
 https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
