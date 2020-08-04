@@ -10,6 +10,8 @@ main() {
 
     # 検索ボックスに入力＆検索実行
     send_keys $searchBox "タピオカ\n"
+
+    delete_session
 }
 
 main
