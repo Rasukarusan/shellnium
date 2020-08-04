@@ -36,6 +36,19 @@ $ sh demo2.sh
 This script is headless and display chromedriver's behavior as iTerm's background.  
 The above GIF is `demo2.sh`.
 
+## Todo
+
+The bash webdriver `selenium.sh` is incomplete.  
+Here's what `selenium.sh` can currently do
+
+- delete session
+- open url
+- find element
+- send keys
+- click element
+- take screenshot
+- exec javascript
+
 ## Article
 
 https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
