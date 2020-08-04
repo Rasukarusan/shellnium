@@ -13,9 +13,13 @@ sessionId=$(curl -s -X POST -H 'Content-Type: application/json' \
     ${ROOT}/session | jq -r '.sessionId')
 BASE_URL=${ROOT}/session/$sessionId
 
+delete_session() {
+    curl -s -X DELETE ${BASE_URL} > /dev/null
+}
+
 navigate_to() {
     local url=$1
-    curl -s -X POST -H 'Content-Type: application/json' -d '{"url":"'${url}'"}' ${BASE_URL}/url >/dev/null
+    $POST -d '{"url":"'${url}'"}' ${BASE_URL}/url >/dev/null
 }
 
 find_element() {
