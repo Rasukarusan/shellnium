@@ -3,13 +3,22 @@ GET='curl -s -X GET'
 POST='curl -s -X POST -H "Content-Type: application/json"'
 ROOT=http://localhost:9515
 
+is_ready() {
+    $GET ${ROOT}/status | jq -r '.value.ready'
+}
+
+if [ "$(is_ready)" != 'true' ]; then
+    echo "[ERROR] chromedriver is not running."
+    exit
+fi
+
 sessionId=$(curl -s -X POST -H 'Content-Type: application/json' \
     -d "{
-        \"desiredCapabilities\": {
-            \"browserName\":\"chrome\"
-            ${options}
-        }
-    }" \
+            \"desiredCapabilities\": {
+                \"browserName\":\"chrome\"
+                ${options}
+            }
+        }" \
     ${ROOT}/session | jq -r '.sessionId')
 BASE_URL=${ROOT}/session/$sessionId
 
