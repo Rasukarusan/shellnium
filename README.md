@@ -36,6 +36,11 @@ $ sh demo.sh
 $ sh demo2.sh
 ```
 
+You can add chrome options. e.g. `--headless`.
+```sh
+$ sh demo.sh --headless
+```
+
 `demo2.sh` is required iTerm2 and MacOS.
 
 This script is headless and display chromedriver's behavior as iTerm's background.
