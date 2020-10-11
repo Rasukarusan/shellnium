@@ -66,6 +66,6 @@ https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
 
 - [WebDriver](https://www.w3.org/TR/webdriver/)
 
-## LICENCE
+## LICENSE
 
 MIT
