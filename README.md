@@ -1,4 +1,7 @@
-# shellnium
+# Shellnium
+
+Shellnium is the selenium webdriver for Bash.
+You can exec selenium simply on your terminal.
 
 ![demo](https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif)
 
@@ -9,7 +12,7 @@
 source ./selenium.sh
 
 main() {
-    # Move to Google
+    # Open the URL
     navigate_to 'https://google.co.jp'
 
     # Get the search box
@@ -25,6 +28,8 @@ main
 ## Demo
 
 ```sh
+$ git clone git@github.com:Rasukarusan/shellnium.git
+$ cd shellnium
 $ sh demo.sh
 
 # or
@@ -33,12 +38,16 @@ $ sh demo2.sh
 
 `demo2.sh` is required iTerm2 and MacOS.
 
-This script is headless and display chromedriver's behavior as iTerm's background.  
+This script is headless and display chromedriver's behavior as iTerm's background.
 The above GIF is `demo2.sh`.
+
+## Requirements
+
+- jq
 
 ## Todo
 
-The bash webdriver `selenium.sh` is incomplete.  
+The bash webdriver `selenium.sh` is incomplete.
 Here's what `selenium.sh` can currently do
 
 - delete session
@@ -46,7 +55,7 @@ Here's what `selenium.sh` can currently do
 - find element
 - send keys
 - click element
-- take screenshot
+- take a screenshot
 - exec javascript
 
 ## Article
