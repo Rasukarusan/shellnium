@@ -2,14 +2,14 @@
 source ./selenium.sh
 
 main() {
-    # Googleのトップページに遷移
+    # Open the apage.
     navigate_to 'https://google.co.jp'
 
-    # 検索ボックスの要素を取得
+    # get the element of the search box.
     local searchBox=$(find_element 'name' 'q')
 
-    # 検索ボックスに入力＆検索実行
-    send_keys $searchBox "タピオカ\n"
+    # Input to the search box and enter.
+    send_keys $searchBox "panda\n"
 
     delete_session
 }
