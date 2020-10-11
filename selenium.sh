@@ -12,13 +12,15 @@ if [ "$(is_ready)" != 'true' ]; then
     exit
 fi
 
+chromeOptions=$(for i in $@; do printf "\"${i}\",";done | sed 's/,$//')
+
 sessionId=$(curl -s -X POST -H 'Content-Type: application/json' \
-    -d "{
-            \"desiredCapabilities\": {
-                \"browserName\":\"chrome\"
-                ${options}
+    -d '{
+            "desiredCapabilities": {
+                "browserName":"chrome",
+                "chromeOptions": {"args": ['${chromeOptions}'] }
             }
-        }" \
+        }' \
     ${ROOT}/session | jq -r '.sessionId')
 BASE_URL=${ROOT}/session/$sessionId
 
