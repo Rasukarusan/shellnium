@@ -51,7 +51,7 @@ click() {
 }
 
 screenshot() {
-    local path=$1
+    local path=${1:-./screenshot.png}
     $GET ${BASE_URL}/screenshot | jq -r '.value' | base64 -d > $path
 }
 
