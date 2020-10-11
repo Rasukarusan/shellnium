@@ -42,7 +42,7 @@ find_element() {
 send_keys() {
     local elementId=$1
     local value=$2
-    $POST -d '{"value": ["'$value'"]}' ${BASE_URL}/element/${elementId}/value >/dev/null
+    $POST -d "{\"value\": [\"${value}\"]}" ${BASE_URL}/element/${elementId}/value >/dev/null
 }
 
 click() {
