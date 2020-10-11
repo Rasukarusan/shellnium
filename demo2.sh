@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-options=",\"chromeOptions\": { \"args\": [\"--headless\"] }"
-source ./selenium.sh
+source ./selenium.sh --headless
 
 main() {
     screen_clear
@@ -9,8 +8,8 @@ main() {
     local searchBox=$(find_element 'name' 'q')
     set_background_image
 
-    # 入力している感を出すため1文字ずつ入力
-    local words=('タ' 'ピ' 'オ' 'カ')
+    # Enter one character at a time to give the feeling of typing
+    local words=('p' 'a' 'n' 'd' 'a')
     for word in ${words[@]}; do
         send_keys $searchBox $word
         set_background_image
