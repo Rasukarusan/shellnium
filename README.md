@@ -38,7 +38,7 @@ $ sh demo2.sh
 
 You can add chrome options. e.g. `--headless`.
 ```sh
-$ sh demo.sh --headless
+$ sh demo.sh --headless --lang=es
 ```
 
 `demo2.sh` is required iTerm2 and MacOS.
