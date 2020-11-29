@@ -105,6 +105,24 @@ find_elements() {
   $POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" ${BASE_URL}/elements | jq -r '.value[].ELEMENT'
 }
 
+find_element_from_element() {
+  local elementId=$1
+  local property=$2
+  local value=$3
+  $POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" ${BASE_URL}/element/${elementId}/element | jq -r '.value.ELEMENT'
+}
+
+find_elements_from_element() {
+  local elementId=$1
+  local property=$2
+  local value=$3
+  $POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" ${BASE_URL}/element/${elementId}/elements | jq -r '.value[].ELEMENT'
+}
+
+get_active_element() {
+  $GET ${BASE_URL}/element/active | jq -r '.value.ELEMENT'
+}
+
 ##############################
 # Element State
 ##############################
