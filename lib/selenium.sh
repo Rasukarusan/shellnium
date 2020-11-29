@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-source ./util.sh
-source ./core.sh
+source ./lib/util.sh
+source ./lib/core.sh
 
 ROOT=http://localhost:9515
 

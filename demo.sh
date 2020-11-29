@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source ./selenium.sh
+source ./lib/selenium.sh
 
 main() {
     # Open the apage.
