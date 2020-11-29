@@ -44,7 +44,7 @@ navigate_to() {
 find_element() {
     local property=$1
     local value=$2
-    $POST -d '{"using":"'$property'", "value": "'$value'"}' ${BASE_URL}/element | jq -r '.value.ELEMENT'
+    $POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" ${BASE_URL}/element | jq -r '.value.ELEMENT'
 }
 
 send_keys() {
