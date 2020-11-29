@@ -1,3 +1,5 @@
+#!/usr/bin/env bash
+
 ##############################
 # Session
 ##############################
@@ -18,7 +20,6 @@ new_session() {
 delete_session() {
   curl -s -X DELETE ${BASE_URL} > /dev/null
 }
-
 
 ##############################
 # Navigate
@@ -82,6 +83,16 @@ set_timeout_implicit() {
 # Element Retrieval
 ##############################
 
+#
+# $property:
+#   - "id"
+#   - "name"
+#   - "css selector"
+#   - "link text"
+#   - "partial link text"
+#   - "tag name"
+#   - "xpath"
+#
 find_element() {
   local property=$1
   local value=$2
