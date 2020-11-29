@@ -7,6 +7,14 @@ is_ready() {
     $GET ${ROOT}/status | jq -r '.value.ready'
 }
 
+get_version_google_chrome() {
+  /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
+}
+
+get_version_chromedriver() {
+  chromedriver --version
+}
+
 if [ "$(is_ready)" != 'true' ]; then
     echo "[ERROR] chromedriver is not running."
     exit
