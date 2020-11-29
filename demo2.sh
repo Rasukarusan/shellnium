@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-source ./selenium.sh --headless
+source ./lib/selenium.sh --headless
 
 main() {
     screen_clear
@@ -20,7 +20,7 @@ main() {
     set_background_image
 
     for i in `seq 0 100 1000`; do
-        exec_sync_script "window.scroll(0,$i)"
+        exec_script "window.scroll(0,$i)"
         set_background_image
     done
     screen_clear
