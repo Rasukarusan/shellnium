@@ -53,7 +53,7 @@ $ sh demo.sh --headless --lang=es
 ## Methods
 
 Shellnium provides the following methods.
-Document is [here]() or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
+Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/document.md) or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
 
 ### Session
 
