@@ -91,6 +91,7 @@ set_timeout_implicit() {
 #   - "link text"
 #   - "partial link text"
 #   - "tag name"
+#   - "class name"
 #   - "xpath"
 #
 find_element() {
