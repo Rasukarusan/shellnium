@@ -35,33 +35,90 @@ $ sh demo.sh
 # or
 $ sh demo2.sh
 ```
+`demo2.sh` is required iTerm2 and MacOS.
+
+This script is headless and display chromedriver's behavior as iTerm's background.
+The above GIF is `demo2.sh`.
 
 You can add chrome options. e.g. `--headless`.
 ```sh
 $ sh demo.sh --headless --lang=es
 ```
 
-`demo2.sh` is required iTerm2 and MacOS.
-
-This script is headless and display chromedriver's behavior as iTerm's background.
-The above GIF is `demo2.sh`.
 
 ## Requirements
 
 - jq
 
-## Todo
+## Methods
 
-The bash webdriver `selenium.sh` is incomplete.
-Here's what `selenium.sh` can currently do
+Shellnium provides the following methods.
+Document is [here]() or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
 
-- delete session
-- open url
-- find element
-- send keys
-- click element
-- take a screenshot
-- exec javascript
+### Session
+
+- is_ready
+- new_session
+- delete_session
+
+### Navigate
+
+- navigate_to
+- get_current_url
+- get_title
+- back
+- forward
+- refresh
+
+### Timeouts
+
+- get_timeouts
+- set_timeouts
+- set_timeout_script
+- set_timeout_pageLoad
+- set_timeout_implicit
+
+### Element Retrieval
+
+- find_element
+- find_elements
+- find_element_from_element
+- find_elements_from_element
+- get_active_element
+
+### Element State
+
+- get_attribute
+- get_property
+- get_css_value
+- get_text
+- get_tag_name
+- get_rect
+- is_element_enabled
+
+### Element Interaction
+
+- send_keys
+- click
+- element_clear
+
+### Document
+
+- exec_script
+- screenshot
+
+### Context
+
+- get_window_handle
+- get_window_handles
+- delete_window
+- new_window
+- switch_to_window
+- get_window_rect
+- set_window_rect
+- maximize_window
+- minimize_window
+- fullscreen_window
 
 ## Article
 
