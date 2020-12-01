@@ -132,7 +132,7 @@ Command usage:
 element=$(find_element 'class name' 'title')
 ```
 
-### Find Element By Class Name
+### Find Element By Xpath
 
 Example usage:
 ```html
