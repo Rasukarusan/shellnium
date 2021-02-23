@@ -251,7 +251,7 @@ Example usage:
 Command usage:
 ```sh
 local input=$(find_element 'xpath' "//input[@type='file' and @id='input-files']")
-# Selenium supports muti-upload directly by calling sendKeys on the <input> element with the paths separated by a line-break character.
+# separate by a line-break character
 send_keys $input "/Users/yourname/Downloads/graph.png\n/Users/yourname/Downloads/develop.jpg"
 ```
 
