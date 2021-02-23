@@ -166,8 +166,8 @@ Example usage:
 Command usage:
 ```sh
 elements=($(find_elements 'tag name' 'p'))
-get_text elements[0] # welcome
-get_text elements[1] # here
+get_text ${elements[0]} # welcome
+get_text ${elements[1]} # here
 ```
 
 ## Find Element From Element
@@ -191,6 +191,68 @@ Command usage:
 content=$(find_element 'id' 'content')
 element=$(find_element_from_element $content 'tag name' 'p')
 get_text $element # welcome
+```
+
+## File Upload
+
+Example usage:
+```html
+<html>
+<body>
+  <input id="input-file" type="file"  />
+</body>
+</html>
+```
+
+Command usage:
+```sh
+# Use xpath
+input=$(find_element 'xpath' "//input[@type='file' and @id='input-file']")
+# absolute path
+send_keys $input "/Users/yourname/Downloads/graph.png"
+```
+
+
+## Multiple File Upload
+
+Example usage:
+```html
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width" />
+    <title>Test</title>
+  </head>
+<body>
+  <input id="input-files" type="file" onchange="OnFileSelect(this)" multiple />
+  <ul id="description"></ul>
+  <script>
+    function OnFileSelect(inputElement) {
+        let fileList = inputElement.files
+        let fileCount = fileList.length
+        let fileListBody = `Number of files: ${fileCount}<br/><br/>`
+        for ( let i = 0; i < fileCount; i++ ) {
+            let file = fileList[i]
+            fileListBody += `[${i+1}]<br/>`
+            fileListBody += `name             = ${file.name}<br/>`
+            fileListBody += `type             = ${file.type}<br/>`
+            fileListBody += `size             = ${file.size}<br/>`
+            fileListBody += `lastModified     = ${file.lastModified}<br/>`
+            fileListBody += '<br/>'
+        }
+        document.getElementById('description').innerHTML = fileListBody
+    }
+  </script>
+</body>
+</html>
+```
+
+Command usage:
+```sh
+local input=$(find_element 'xpath' "//input[@type='file' and @id='input-files']")
+# Selenium supports muti-upload directly by calling sendKeys on the <input> element with the paths separated by a line-break character.
+send_keys $input "/Users/yourname/Downloads/graph.png\n/Users/yourname/Downloads/develop.jpg"
 ```
 
 ## Other methods
