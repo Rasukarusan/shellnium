@@ -122,6 +122,10 @@ Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/doc.md) 
 
 ## Article
 
+English
+https://dev.to/rasukarusan/shellnium-simple-selnium-webdriver-for-bash-1a9k
+
+Japanese
 https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
 
 ## Reference
