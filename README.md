@@ -26,25 +26,37 @@ main() {
 main
 ```
 
-## Demo
+## Usage
 
+### 1. Run chromedriver
+```sh
+$ chromedriver
+```
+If you don't install `chromedriver`, you can install by `homebrew`.
+```sh
+brew install chromedriver
+```
+
+### 2. Exec demo.sh
 ```sh
 $ git clone git@github.com:Rasukarusan/shellnium.git
 $ cd shellnium
 $ sh demo.sh
+```
 
-# or
+You can add chrome options. e.g. `--headless`.
+```sh
+$ sh demo.sh --headless --lang=es
+```
+
+### Bonus Script
+```sh
 $ sh demo2.sh
 ```
 `demo2.sh` is required iTerm2 and MacOS.
 
 This script is headless and display chromedriver's behavior as iTerm's background.
 The above GIF is `demo2.sh`.
-
-You can add chrome options. e.g. `--headless`.
-```sh
-$ sh demo.sh --headless --lang=es
-```
 
 
 ## Requirements
