@@ -37,6 +37,18 @@ If you don't install `chromedriver`, you can install by `homebrew`.
 brew install chromedriver
 ```
 
+**Make sure you have the right version of chromedriver and GoogleChrome.**
+```sh
+# check the version of Google Chrome
+# ex. MacOS
+$ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
+Google Chrome 89.0.4389.82
+
+# check the version of chromedriver
+$ chromedriver --version
+ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
+```
+
 ### 2. Exec demo.sh
 ```sh
 $ git clone git@github.com:Rasukarusan/shellnium.git
