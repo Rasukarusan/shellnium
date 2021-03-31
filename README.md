@@ -1,5 +1,5 @@
 <p align="center">
-<img widht="500" height="200" src="https://user-images.githubusercontent.com/17779386/112637471-8a785780-8e81-11eb-898f-c51e9deaba15.png">
+<img widht="500" height="auto" src="https://user-images.githubusercontent.com/17779386/112637471-8a785780-8e81-11eb-898f-c51e9deaba15.png">
 <br />
 
 <img alt="" src="https://flat.badgen.net/github/stars/Rasukarusan/shellnium">
