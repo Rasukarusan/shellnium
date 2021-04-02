@@ -255,6 +255,18 @@ local input=$(find_element 'xpath' "//input[@type='file' and @id='input-files']"
 send_keys $input "/Users/yourname/Downloads/graph.png\n/Users/yourname/Downloads/develop.jpg"
 ```
 
+## Get cookies
+Command usage:
+```sh
+get_cookies > cookies.txt
+```
+
+## Set cookies
+Command usage:
+```sh
+set_cookies "$(<cookies.txt)"
+```
+
 ## Other methods
 
 Please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
