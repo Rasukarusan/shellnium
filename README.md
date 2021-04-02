@@ -95,6 +95,8 @@ Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/doc.md) 
 - is_ready
 - new_session
 - delete_session
+- get_cookies
+- set_cookies
 
 ### Navigate
 
