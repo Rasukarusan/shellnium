@@ -21,6 +21,15 @@ delete_session() {
   curl -s -X DELETE ${BASE_URL} > /dev/null
 }
 
+get_cookies() {
+	$GET ${BASE_URL}/cookie | jq -r '.value[]'
+}
+
+set_cookies() {
+	local cookie=$1
+	$POST -d "{\"cookie\": $cookie}" ${BASE_URL}/cookie >/dev/null
+}
+
 ##############################
 # Navigate
 ##############################
