@@ -10,7 +10,7 @@
 
 # Shellnium
 
-Shellnium is the selenium webdriver for Bash.  
+Shellnium is the selenium WebDriver for Bash.  
 You can exec selenium simply on your terminal.
 **All you need is Bash or Zsh.**
 
@@ -20,7 +20,7 @@ If you learn by watching videos, check out this screencast by [@gotbletu](https:
 
 [![shellnium - Automate The Web Using Shell Scripts - Linux SHELL SCRIPT](https://img.youtube.com/vi/Q10dcPjmRTI/0.jpg)](https://www.youtube.com/watch?v=Q10dcPjmRTI)
 
-## Bash Webdriver
+## Bash WebDriver
 
 ```sh
 #!/usr/bin/env bash
@@ -42,7 +42,7 @@ main
 
 ## Usage
 
-### 1. Run chromedriver
+### 1. Run ChromeDriver
 ```sh
 $ chromedriver
 ```
@@ -51,14 +51,14 @@ If you don't install `chromedriver`, you can install by `homebrew`.
 brew install chromedriver
 ```
 
-**Make sure you have the right version of chromedriver and GoogleChrome.**
+**Make sure you have the right version of ChromeDriver and GoogleChrome.**
 ```sh
 # check the version of Google Chrome
 # ex. MacOS
 $ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
 Google Chrome 89.0.4389.82
 
-# check the version of chromedriver
+# check the version of ChromeDriver
 $ chromedriver --version
 ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
 ```
@@ -79,7 +79,7 @@ $ sh demo.sh --headless --lang=es
 ```sh
 $ sh demo2.sh
 ```
-`demo2.sh` is required iTerm2 and MacOS.
+`demo2.sh` is required iTerm2 and Mac OS.
 
 This script is headless and display chromedriver's behavior as iTerm's background.
 The above GIF is `demo2.sh`.
@@ -94,7 +94,7 @@ The above GIF is `demo2.sh`.
 Shellnium provides the following methods.
 Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/doc.md) or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
 
-### Session
+### セッション
 
 - is_ready
 - new_session
