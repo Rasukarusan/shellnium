@@ -14,7 +14,7 @@ Shellnium is the selenium WebDriver for Bash.
 You can exec selenium simply on your terminal.
 **All you need is Bash or Zsh.**  
 
-Document is [here](https://shellnium-site.vercel.app).
+Document is <a href="https://shellnium-site.vercel.app" target="_blank">here</a>.
 
 ![demo](https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif)
 
