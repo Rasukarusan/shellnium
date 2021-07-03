@@ -75,7 +75,7 @@ set_timeouts() {
   local script=$1
   local pageLoad=$2
   local implicit=$3
-  $POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" ${BASE_URL}/timeouts
+  $POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" ${BASE_URL}/timeouts >/dev/null
 }
 
 set_timeout_script() {
