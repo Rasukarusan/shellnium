@@ -12,7 +12,9 @@
 
 Shellnium is the selenium WebDriver for Bash.  
 You can exec selenium simply on your terminal.
-**All you need is Bash or Zsh.**
+**All you need is Bash or Zsh.**  
+
+Document is [here](https://shellnium-site.vercel.app).
 
 ![demo](https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif)
 
@@ -94,7 +96,7 @@ The above GIF is `demo2.sh`.
 Shellnium provides the following methods.
 Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/doc.md) or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
 
-### セッション
+### Session
 
 - is_ready
 - new_session
