@@ -13,6 +13,7 @@ is_ready() {
 }
 
 new_session() {
+  local chromeOptions=$(for i in $@; do printf "\"${i}\",";done | sed 's/,$//')
   $POST -d '{
     "desiredCapabilities": {
       "browserName":"chrome",

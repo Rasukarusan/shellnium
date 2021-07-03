@@ -2,22 +2,16 @@
 source ./lib/util.sh
 source ./lib/core.sh
 
-if [ "$(uname)" == 'Darwin' ]; then
-  browserVer=$(get_version_google_chrome | awk '{print $3}' | awk -F '.' '{print $1$2}')
-  driverVer=$(get_version_chromedriver | awk '{print $2}' | awk -F '.' '{print $1$2}')
-  if [ $browserVer -ne $driverVer ];then
-    printf "\e[35m**Make sure you have the right version of Chromedriver and GoogleChrome.**\e[m\n"
-    get_version_google_chrome 
-    get_version_chromedriver
+init() {
+  local sessionId=$(new_session $@)
+  BASE_URL=${ROOT}/session/$sessionId
+
+  if [ "$(is_ready)" != 'true' ]; then
+    printf "\e[35m[ERROR] chromedriver is not running.\e[m\n"
     exit
   fi
-fi
+}
 
-chromeOptions=$(for i in $@; do printf "\"${i}\",";done | sed 's/,$//')
-sessionId=$(new_session)
-BASE_URL=${ROOT}/session/$sessionId
+detect_version
+init $@
 
-if [ "$(is_ready)" != 'true' ]; then
-  printf "\e[35m[ERROR] chromedriver is not running.\e[m\n"
-  exit
-fi
