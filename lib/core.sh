@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 
+ROOT=http://localhost:9515
+GET='curl -s -X GET'
+POST='curl -s -X POST -H "Content-Type: application/json"'
+
 ##############################
 # Session
 ##############################
