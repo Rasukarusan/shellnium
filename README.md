@@ -32,7 +32,7 @@ main() {
 main
 ```
 
-<img src="https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif" width="700" height="auto">
+<img src="https://shellnium-site.vercel.app/demo.gif" width="700" height="auto">
 
 ## Documentation
 
@@ -153,13 +153,15 @@ Japanese
 https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
 
 ## Example
+
+<img src="https://shellnium-site.vercel.app/demo2.gif" width="700" height="auto">
+
 ```sh
 $ sh demo2.sh
 ```
 `demo2.sh` is required iTerm2 and Mac OS.
 
-This script is headless and display chromedriver's behavior as iTerm's background.
-The above GIF is `demo2.sh`.
+This script is headless and display chromedriver's behavior as iTerm's background with AppleScript.
 
 ## Reference
 
