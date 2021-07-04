@@ -20,13 +20,13 @@ source ./selenium.sh
 
 main() {
     # Open the URL
-    navigate_to 'https://google.co.jp'
+    navigate_to 'https://google.com'
 
     # Get the search box
     local searchBox=$(find_element 'name' 'q')
 
     # send keys
-    send_keys $searchBox "animal\n"
+    send_keys $searchBox "panda\n"
 }
 
 main
