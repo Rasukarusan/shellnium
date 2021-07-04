@@ -3,27 +3,26 @@ source ./lib/selenium.sh --headless
 
 main() {
     screen_clear
-    navigate_to 'https://google.co.jp'
+    navigate_to 'https://www.google.com'
 
     local searchBox=$(find_element 'name' 'q')
     set_background_image
 
     # Enter one character at a time to give the feeling of typing
-    local words=('p' 'a' 'n' 'd' 'a')
+    local words=('p' 'a' 'n' 'd' 'a' '\n')
     for word in ${words[@]}; do
         send_keys $searchBox $word
         set_background_image
     done
 
-    # ENTER
-    send_keys $searchBox '\n'
-    set_background_image
-
     for i in `seq 0 100 1000`; do
         exec_script "window.scroll(0,$i)"
         set_background_image
     done
+
     screen_clear
+
+    delete_session
 }
 
 iterm_set_background_image() {
