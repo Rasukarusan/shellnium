@@ -14,16 +14,6 @@ Shellnium is the selenium WebDriver for Bash.
 You can exec selenium simply on your terminal.
 **All you need is Bash or Zsh.**  
 
-Document is <a href="https://shellnium-site.vercel.app" target="_blank">here</a>.
-
-![demo](https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif)
-
-If you learn by watching videos, check out this screencast by [@gotbletu](https://github.com/gotbletu) to explore `shellnium` features.
-
-[![shellnium - Automate The Web Using Shell Scripts - Linux SHELL SCRIPT](https://img.youtube.com/vi/Q10dcPjmRTI/0.jpg)](https://www.youtube.com/watch?v=Q10dcPjmRTI)
-
-## Bash WebDriver
-
 ```sh
 #!/usr/bin/env bash
 source ./selenium.sh
@@ -42,33 +32,24 @@ main() {
 main
 ```
 
-## Usage
+<img src="https://user-images.githubusercontent.com/17779386/85990922-aacbd080-ba2d-11ea-8e88-cc9b79075b31.gif" width="700" height="auto">
 
-### 1. Run ChromeDriver
-```sh
+## Documentation
+
+https://shellnium-site.vercel.app
+
+If you learn by watching videos, check out this screencast by [@gotbletu](https://github.com/gotbletu) to explore `shellnium` features.
+
+[![shellnium - Automate The Web Using Shell Scripts - Linux SHELL SCRIPT](https://img.youtube.com/vi/Q10dcPjmRTI/0.jpg)](https://www.youtube.com/watch?v=Q10dcPjmRTI)
+
+
+## Quick Start
+
+```bash
+# Run ChromeDriver before execute script
 $ chromedriver
-```
-If you don't install `chromedriver`, you can install by `homebrew`.
-```sh
-brew install chromedriver
-```
 
-**Make sure you have the right version of ChromeDriver and GoogleChrome.**
-```sh
-# check the version of Google Chrome
-# ex. MacOS
-$ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
-Google Chrome 89.0.4389.82
-
-# check the version of ChromeDriver
-$ chromedriver --version
-ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
-```
-
-### 2. Exec demo.sh
-```sh
-$ git clone git@github.com:Rasukarusan/shellnium.git
-$ cd shellnium
+# execute script
 $ sh demo.sh
 ```
 
@@ -77,15 +58,17 @@ You can add chrome options. e.g. `--headless`.
 $ sh demo.sh --headless --lang=es
 ```
 
-### Bonus Script
+**Make sure you have the right version of ChromeDriver and GoogleChrome.**
 ```sh
-$ sh demo2.sh
+# Check the version of Google Chrome
+# ex. MacOS
+$ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
+Google Chrome 89.0.4389.82
+
+# Check the version of ChromeDriver
+$ chromedriver --version
+ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
 ```
-`demo2.sh` is required iTerm2 and Mac OS.
-
-This script is headless and display chromedriver's behavior as iTerm's background.
-The above GIF is `demo2.sh`.
-
 
 ## Requirements
 
@@ -93,9 +76,7 @@ The above GIF is `demo2.sh`.
 
 ## Methods
 
-Shellnium provides the following methods.
-Document is [here](https://github.com/Rasukarusan/shellnium/blob/master/doc.md) or please see [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh).
-
+Shellnium provides the following methods. See [document](https://shellnium-site.vercel.app) or [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh) for details.
 ### Session
 
 - is_ready
@@ -170,6 +151,15 @@ https://dev.to/rasukarusan/shellnium-simple-selnium-webdriver-for-bash-1a9k
 
 Japanese
 https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
+
+## Example
+```sh
+$ sh demo2.sh
+```
+`demo2.sh` is required iTerm2 and Mac OS.
+
+This script is headless and display chromedriver's behavior as iTerm's background.
+The above GIF is `demo2.sh`.
 
 ## Reference
 
