@@ -205,7 +205,7 @@ element_clear() {
 ##############################
 
 exec_script() {
-  $POST -d "{\"script\": \"$1\", \"args\":[\"$2\"]}" ${BASE_URL}/execute/sync >/dev/null
+  $POST -d "{\"script\": \"$1\", \"args\":[\"$2\"]}" ${BASE_URL}/execute/sync
 }
 
 screenshot() {
