@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://shellnium-site.vercel.app/">
+  <a href="https://shellnium-site.vercel.app/" target="_blank">
     <img widht="500" height="auto" src="https://user-images.githubusercontent.com/17779386/112637471-8a785780-8e81-11eb-898f-c51e9deaba15.png">
   </a>
 <br />
