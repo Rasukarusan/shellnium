@@ -240,6 +240,15 @@ switch_to_window() {
   $POST -d "{\"name\":\"$handle\"}" ${BASE_URL}/window >/dev/null
 }
 
+switch_to_frame() {
+  local id=$1
+  $POST -d "{\"id\":\"$id\"}" ${BASE_URL}/frame >/dev/null
+}
+
+switch_to_parent_frame() {
+  $POST ${BASE_URL}/frame/parent >/dev/null
+}
+
 get_window_rect() {
   $GET ${BASE_URL}/window/rect | jq -r '.value'
 }
