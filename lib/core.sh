@@ -242,7 +242,13 @@ switch_to_window() {
 
 switch_to_frame() {
   local id=$1
-  $POST -d "{\"id\":\"$id\"}" ${BASE_URL}/frame >/dev/null
+  local param="{\"id\":\"$id\"}"
+
+  if expr "$id" : "[0-9]*$" >&/dev/null;then # is integer
+    $POST -d "{\"id\":$id}" ${BASE_URL}/frame >/dev/null
+  else
+    $POST -d "{\"id\":\"$id\"}" ${BASE_URL}/frame >/dev/null
+  fi
 }
 
 switch_to_parent_frame() {
