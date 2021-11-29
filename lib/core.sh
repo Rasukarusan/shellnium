@@ -240,13 +240,26 @@ switch_to_window() {
   $POST -d "{\"name\":\"$handle\"}" ${BASE_URL}/window >/dev/null
 }
 
+#
+# param is
+#   - element
+#   - integer
+#   - id
+#
 switch_to_frame() {
   local id=$1
   local param="{\"id\":\"$id\"}"
 
+  # is element
+  local frameId=$(get_attribute $id 'id')
+  if ! echo $frameId | grep "stale element reference" >/dev/null ; then
+    $POST -d "{\"id\":\"$frameId\"}" ${BASE_URL}/frame >/dev/null
+    return
+  fi
+
   if expr "$id" : "[0-9]*$" >&/dev/null;then # is integer
     $POST -d "{\"id\":$id}" ${BASE_URL}/frame >/dev/null
-  else
+  else # is id
     $POST -d "{\"id\":\"$id\"}" ${BASE_URL}/frame >/dev/null
   fi
 }
