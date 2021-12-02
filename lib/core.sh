@@ -36,6 +36,10 @@ set_cookies() {
 	$POST -d "{\"cookie\": $cookie}" ${BASE_URL}/cookie >/dev/null
 }
 
+delete_cookies() {
+  	$DELETE ${BASE_URL}/cookie > /dev/null
+}
+
 ##############################
 # Navigate
 ##############################
