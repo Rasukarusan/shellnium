@@ -86,6 +86,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 - delete_session
 - get_cookies
 - set_cookies
+- delete_cookies
 
 ### Navigate
 
