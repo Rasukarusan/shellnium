@@ -3,6 +3,7 @@
 ROOT=http://localhost:9515
 GET='curl -s -X GET'
 POST='curl -s -X POST -H "Content-Type: application/json"'
+DELETE='curl -s -X DELETE'
 
 ##############################
 # Session
@@ -23,7 +24,7 @@ new_session() {
 }
 
 delete_session() {
-  curl -s -X DELETE ${BASE_URL} > /dev/null
+  $DELETE ${BASE_URL} > /dev/null
 }
 
 get_cookies() {
@@ -33,6 +34,10 @@ get_cookies() {
 set_cookies() {
 	local cookie=$1
 	$POST -d "{\"cookie\": $cookie}" ${BASE_URL}/cookie >/dev/null
+}
+
+delete_cookies() {
+  	$DELETE ${BASE_URL}/cookie > /dev/null
 }
 
 ##############################

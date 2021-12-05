@@ -86,6 +86,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 - delete_session
 - get_cookies
 - set_cookies
+- delete_cookies
 
 ### Navigate
 
@@ -140,6 +141,8 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 - delete_window
 - new_window
 - switch_to_window
+- switch_to_frame
+- switch_to_parent_frame
 - get_window_rect
 - set_window_rect
 - maximize_window
