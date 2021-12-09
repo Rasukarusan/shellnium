@@ -217,6 +217,12 @@ exec_script() {
   $POST -d "{\"script\": \"$1\", \"args\":[\"$2\"]}" ${BASE_URL}/execute/sync
 }
 
+element_screenshot() {
+  local elementId=$1
+  local path=${2:-./screenshot.png}
+  $GET ${BASE_URL}/element/${elementId}/screenshot | jq -r '.value' | base64 -d > $path
+}
+
 screenshot() {
   local path=${1:-./screenshot.png}
   $GET ${BASE_URL}/screenshot | jq -r '.value' | base64 -d > $path
