@@ -131,6 +131,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Document
 
+- get_source
 - exec_script
 - screenshot
 
