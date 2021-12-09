@@ -209,6 +209,10 @@ element_clear() {
 # Document
 ##############################
 
+get_source() {
+	$GET ${BASE_URL}/source
+}
+
 exec_script() {
   $POST -d "{\"script\": \"$1\", \"args\":[\"$2\"]}" ${BASE_URL}/execute/sync
 }
