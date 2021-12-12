@@ -143,6 +143,10 @@ get_active_element() {
   $GET ${BASE_URL}/element/active | jq -r '.value.ELEMENT'
 }
 
+get_alert_text() {
+  $GET ${BASE_URL}/alert/text | jq -r '.value'
+}
+
 ##############################
 # Element State
 ##############################
@@ -193,6 +197,11 @@ send_keys() {
   local elementId=$1
   local value=$2
   $POST -d "{\"value\": [\"${value}\"]}" ${BASE_URL}/element/${elementId}/value >/dev/null
+}
+
+send_alert_text() {
+  local value=$1
+  $POST -d "{\"value\": [\"${value}\"]}" ${BASE_URL}/alert/text >/dev/null
 }
 
 click() {
@@ -281,6 +290,16 @@ switch_to_frame() {
 
 switch_to_parent_frame() {
   $POST ${BASE_URL}/frame/parent >/dev/null
+}
+
+dismiss_alert() {
+  local handle=$1
+  $POST ${BASE_URL}/alert/dismiss >/dev/null
+}
+
+accept_alert() {
+  local handle=$1
+  $POST ${BASE_URL}/alert/accept >/dev/null
 }
 
 get_window_rect() {
