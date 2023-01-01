@@ -184,6 +184,10 @@ get_rect() {
   $GET ${BASE_URL}/element/${elementId}/rect | jq -r '.value'
 }
 
+get_page_source() {
+  $GET ${BASE_URL}/source | jq -r '.value'
+}
+
 is_element_enabled() {
   local elementId=$1
   $GET ${BASE_URL}/element/${elementId}/enabled | jq -r '.value'
