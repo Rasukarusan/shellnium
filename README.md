@@ -139,6 +139,14 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 - element_screenshot
 - screenshot
 
+### Cookies
+
+- get_all_cookies
+- get_named_cookie
+- add_cookie
+- delete_cookie
+- delete_all_cookies
+
 ### Context
 
 - get_window_handle
