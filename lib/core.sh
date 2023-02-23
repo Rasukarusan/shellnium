@@ -27,17 +27,29 @@ delete_session() {
   $DELETE ${BASE_URL} > /dev/null
 }
 
-get_cookies() {
-	$GET ${BASE_URL}/cookie | jq -r '.value[]'
+get_all_cookies() {
+  $GET ${BASE_URL}/cookie | jq -r '.value[]'
 }
 
-set_cookies() {
-	local cookie=$1
-	$POST -d "{\"cookie\": $cookie}" ${BASE_URL}/cookie >/dev/null
+get_named_cookie() {
+  local name=$1
+  $GET ${BASE_URL}/cookie/$name | jq -r '.value'
 }
 
-delete_cookies() {
-  	$DELETE ${BASE_URL}/cookie > /dev/null
+add_cookie() {
+  local cookie=$1
+  value="{\"cookie\": ${cookie}}"
+  echo $value
+  $POST -d "$value" ${BASE_URL}/cookie
+}
+
+delete_cookie() {
+  local name=$1
+  $DELETE ${BASE_URL}/cookie/$name > /dev/null
+}
+
+delete_all_cookies() {
+ 	$DELETE ${BASE_URL}/cookie > /dev/null
 }
 
 ##############################
