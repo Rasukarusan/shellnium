@@ -72,6 +72,9 @@ $ chromedriver --version
 ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
 ```
 
+Download chromedriver  
+https://chromedriver.chromium.org/downloads
+
 ## Requirements
 
 - jq
