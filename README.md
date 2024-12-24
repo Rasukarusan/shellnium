@@ -49,7 +49,7 @@ If you learn by watching videos, check out this screencast by [@gotbletu](https:
 
 ```bash
 # Run ChromeDriver before execute script
-$ chromedriver
+$ chromedriver --port=9515
 
 # execute script
 $ sh demo.sh
