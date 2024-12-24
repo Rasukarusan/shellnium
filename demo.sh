@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
-source ./lib/selenium.sh
+
+# Resolve location of current script, in case it's executed from another folder.
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+source "${SCRIPT_DIR}/lib/selenium.sh"
 
 main() {
     # Open the page.
