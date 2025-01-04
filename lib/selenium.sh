@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
-source ./lib/util.sh
-source ./lib/core.sh
+
+# Resolve location of current script, in case it's executed from another folder.
+SCRIPT_DIR="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" &> /dev/null && pwd)"
+source "${SCRIPT_DIR}/util.sh"
+source "${SCRIPT_DIR}/core.sh"
 
 init() {
   local sessionId=$(new_session $@)
