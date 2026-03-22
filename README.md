@@ -133,6 +133,7 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 | `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom ChromeDriver URL (disables auto-setup) |
 | `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
 | `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
+| `SHELLNIUM_DEBUG` | *(unset)* | Set to `true` to enable verbose debug logging |
 
 ### Headless Mode
 
@@ -148,6 +149,16 @@ bash demo.sh
 ```
 
 You can also pass `--headless` directly as a Chrome option (e.g., `bash demo.sh --headless`), but the environment variable is recommended for CI/CD environments.
+
+### Debug Mode
+
+Enable debug mode to see all HTTP requests and responses sent to ChromeDriver, as well as any WebDriver error messages:
+
+```bash
+SHELLNIUM_DEBUG=true bash demo.sh
+```
+
+Debug output is written to stderr so it won't interfere with your script's normal output. WebDriver errors (e.g., element not found, stale element reference) are always surfaced to stderr regardless of debug mode.
 
 #### GitHub Actions Example
 
