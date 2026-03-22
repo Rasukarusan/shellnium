@@ -8,13 +8,14 @@
 <a aria-label="License" href="https://github.com/Rasukarusan/shellnium/blob/master/LICENSE">
   <img alt="" src="https://flat.badgen.net/github/license/Rasukarusan/shellnium">
 </a>
+<img alt="" src="https://github.com/Rasukarusan/shellnium/actions/workflows/ci.yml/badge.svg">
 </p>
 
 # Shellnium
 
-Shellnium is the selenium WebDriver for Bash.  
-You can exec selenium simply on your terminal.
-**All you need is Bash or Zsh.**  
+Shellnium is the Selenium WebDriver for Bash.
+You can automate browser actions simply from your terminal.
+**All you need is Bash or Zsh.**
 
 ```sh
 #!/usr/bin/env bash
@@ -44,123 +45,133 @@ If you learn by watching videos, check out this screencast by [@gotbletu](https:
 
 [![shellnium - Automate The Web Using Shell Scripts - Linux SHELL SCRIPT](https://img.youtube.com/vi/Q10dcPjmRTI/0.jpg)](https://www.youtube.com/watch?v=Q10dcPjmRTI)
 
+## Installation
+
+```bash
+git clone https://github.com/Rasukarusan/shellnium.git
+cd shellnium
+```
+
+### Requirements
+
+- **bash** (4.0+) or **zsh**
+- **curl**
+- **[jq](https://stedolan.github.io/jq/)**
+- **Google Chrome** / **Chromium**
+- **[ChromeDriver](https://googlechromelabs.github.io/chrome-for-testing/)** (must match your Chrome version)
+
+#### Install dependencies
+
+**macOS:**
+```bash
+brew install jq
+brew install --cask chromedriver
+```
+
+**Ubuntu / Debian:**
+```bash
+sudo apt-get install -y jq chromium-chromedriver
+```
+
+**Arch Linux:**
+```bash
+sudo pacman -S jq chromium
+```
 
 ## Quick Start
 
 ```bash
-# Run ChromeDriver before execute script
-$ chromedriver --port=9515
+# 1. Start ChromeDriver
+chromedriver --port=9515
 
-# execute script
-$ sh demo.sh
+# 2. Run a demo script
+bash demo.sh
 ```
 
-You can add chrome options. e.g. `--headless`.
+You can pass Chrome options like `--headless`:
 ```sh
-$ sh demo.sh --headless --lang=es
+bash demo.sh --headless --lang=es
 ```
 
-**Make sure you have the right version of ChromeDriver and GoogleChrome.**
-```sh
-# Check the version of Google Chrome
-# ex. MacOS
-$ /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version
-Google Chrome 89.0.4389.82
+### Custom ChromeDriver URL
 
-# Check the version of ChromeDriver
-$ chromedriver --version
-ChromeDriver 89.0.4389.23 (61b08ee2c50024bab004e48d2b1b083cdbdac579-refs/branch-heads/4389@{#294})
+By default, Shellnium connects to `http://localhost:9515`. You can override this with an environment variable:
+
+```bash
+export SHELLNIUM_DRIVER_URL=http://localhost:4444
+bash demo.sh
 ```
 
-Download chromedriver  
-https://chromedriver.chromium.org/downloads
+### Version Matching
 
-## Requirements
+Make sure your Chrome and ChromeDriver major versions match:
+```bash
+# Check Chrome version
+google-chrome --version        # Linux
+# /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version  # macOS
 
-- jq
+# Check ChromeDriver version
+chromedriver --version
+```
 
 ## Methods
 
 Shellnium provides the following methods. See [document](https://shellnium-site.vercel.app) or [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh) for details.
+
 ### Session
 
-- is_ready
-- new_session
-- delete_session
-- get_cookies
-- set_cookies
-- delete_cookies
+- `is_ready`
+- `new_session`
+- `delete_session`
+- `get_all_cookies` / `get_named_cookie` / `add_cookie` / `delete_cookie` / `delete_all_cookies`
 
 ### Navigate
 
-- navigate_to
-- get_current_url
-- get_title
-- back
-- forward
-- refresh
+- `navigate_to` / `get_current_url` / `get_title`
+- `back` / `forward` / `refresh`
 
 ### Timeouts
 
-- get_timeouts
-- set_timeouts
-- set_timeout_script
-- set_timeout_pageLoad
-- set_timeout_implicit
+- `get_timeouts` / `set_timeouts`
+- `set_timeout_script` / `set_timeout_pageLoad` / `set_timeout_implicit`
 
 ### Element Retrieval
 
-- find_element
-- find_elements
-- find_element_from_element
-- find_elements_from_element
-- get_active_element
+- `find_element` / `find_elements`
+- `find_element_from_element` / `find_elements_from_element`
+- `get_active_element`
 
 ### Element State
 
-- get_attribute
-- get_property
-- get_css_value
-- get_text
-- get_tag_name
-- get_rect
-- is_element_enabled
+- `get_attribute` / `get_property` / `get_css_value`
+- `get_text` / `get_tag_name` / `get_rect`
+- `is_element_enabled`
 
 ### Element Interaction
 
-- send_keys
-- click
-- element_clear
+- `send_keys` / `click` / `element_clear`
 
 ### Document
 
-- get_source
-- exec_script
-- element_screenshot
-- screenshot
-
-### Cookies
-
-- get_all_cookies
-- get_named_cookie
-- add_cookie
-- delete_cookie
-- delete_all_cookies
+- `get_source` / `exec_script`
+- `screenshot` / `element_screenshot`
 
 ### Context
 
-- get_window_handle
-- get_window_handles
-- delete_window
-- new_window
-- switch_to_window
-- switch_to_frame
-- switch_to_parent_frame
-- get_window_rect
-- set_window_rect
-- maximize_window
-- minimize_window
-- fullscreen_window
+- `get_window_handle` / `get_window_handles`
+- `new_window` / `delete_window` / `switch_to_window`
+- `switch_to_frame` / `switch_to_parent_frame`
+- `get_window_rect` / `set_window_rect`
+- `maximize_window` / `minimize_window` / `fullscreen_window`
+
+### Alerts
+
+- `get_alert_text` / `send_alert_text`
+- `accept_alert` / `dismiss_alert`
+
+## Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Article
 
@@ -175,15 +186,15 @@ https://qiita.com/Rasukarusan/items/70a54bd38c71a07ff7bd
 <img src="https://shellnium-site.vercel.app/demo2.gif" width="700" height="auto">
 
 ```sh
-$ sh demo2.sh
+bash demo2.sh
 ```
-`demo2.sh` is required iTerm2 and Mac OS.
+`demo2.sh` requires iTerm2 and macOS.
 
-This script is headless and display chromedriver's behavior as iTerm's background with AppleScript.
+This script is headless and displays ChromeDriver's behavior as iTerm's background with AppleScript.
 
 ## Reference
 
-- [WebDriver](https://www.w3.org/TR/webdriver/)
+- [W3C WebDriver Specification](https://www.w3.org/TR/webdriver/)
 
 ## LICENSE
 
