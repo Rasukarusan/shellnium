@@ -79,7 +79,7 @@ main() {
     # Close the third tab
     echo "Closing Tab 3 ..."
     switch_to_window "$tab3_handle"
-    delete_window
+    delete_window > /dev/null
     echo ""
 
     # Switch back to tab 1 after closing tab 3

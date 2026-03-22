@@ -31,10 +31,10 @@ main() {
 
     local count=0
     for element in $elements; do
-        count=$((count + 1))
-        if [ "$count" -gt 10 ]; then
+        if [ "$count" -ge 10 ]; then
             break
         fi
+        count=$((count + 1))
 
         local text href
         text=$(get_text "$element")
