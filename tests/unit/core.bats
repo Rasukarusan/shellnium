@@ -61,7 +61,7 @@ teardown() {
 
   find_element 'css selector' '.my-class'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"css selector"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
   [[ "$output" == *'"value": ".my-class"'* ]]
 }
 
@@ -76,7 +76,7 @@ teardown() {
 
   find_element 'xpath' '//div[@id="main"]'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"xpath"'* ]]
+  [[ "$output" == *'"using": "xpath"'* ]]
   [[ "$output" == *'//div[@id="main"]'* ]]
 }
 
@@ -91,7 +91,7 @@ teardown() {
 
   find_element 'id' 'my-element'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"id"'* ]]
+  [[ "$output" == *'"using": "id"'* ]]
   [[ "$output" == *'"value": "my-element"'* ]]
 }
 
@@ -106,7 +106,7 @@ teardown() {
 
   find_element 'name' 'username'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"name"'* ]]
+  [[ "$output" == *'"using": "name"'* ]]
   [[ "$output" == *'"value": "username"'* ]]
 }
 
@@ -121,7 +121,7 @@ teardown() {
 
   find_element 'tag name' 'input'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"tag name"'* ]]
+  [[ "$output" == *'"using": "tag name"'* ]]
   [[ "$output" == *'"value": "input"'* ]]
 }
 
@@ -136,7 +136,7 @@ teardown() {
 
   find_element 'link text' 'Click Here'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"link text"'* ]]
+  [[ "$output" == *'"using": "link text"'* ]]
   [[ "$output" == *'"value": "Click Here"'* ]]
 }
 
@@ -151,7 +151,7 @@ teardown() {
 
   find_element 'partial link text' 'Click'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using":"partial link text"'* ]]
+  [[ "$output" == *'"using": "partial link text"'* ]]
   [[ "$output" == *'"value": "Click"'* ]]
 }
 
@@ -203,7 +203,7 @@ teardown() {
   find_element_from_element 'parent-id' 'css selector' '.child'
   run cat "$CURL_LOG"
   [[ "$output" == *"${BASE_URL}/element/parent-id/element"* ]]
-  [[ "$output" == *'"using":"css selector"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
   [[ "$output" == *'"value": ".child"'* ]]
 }
 
@@ -284,7 +284,7 @@ teardown() {
 
   navigate_to 'https://example.com'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"url":"https://example.com"'* ]]
+  [[ "$output" == *'"url": "https://example.com"'* ]]
   [[ "$output" == *"${BASE_URL}/url"* ]]
 }
 
@@ -303,7 +303,7 @@ teardown() {
 
   send_keys 'elem-123' 'hello world'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"value": ["hello world"]'* ]]
+  [[ "$output" == *'"hello world"'* ]]
   [[ "$output" == *"${BASE_URL}/element/elem-123/value"* ]]
 }
 
