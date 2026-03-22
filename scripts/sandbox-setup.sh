@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Claude Code on the Web（クラウドサンドボックス）環境の自動セットアップスクリプト
-# SessionStart Hook から呼び出されることを想定
+# Automatic setup script for Claude Code on the Web (cloud sandbox) environments
+# Intended to be called from a SessionStart Hook
 #
-# 環境判定:
-#   CLAUDE_CODE_REMOTE=true  → Claude Code on the Web のクラウド環境
-#   SANDBOX=1                → 手動で強制実行する場合
+# Environment detection:
+#   CLAUDE_CODE_REMOTE=true  -> Claude Code on the Web cloud environment
+#   SANDBOX=1                -> Force execution manually
 #
-# 機能:
-#   - Docker デーモン起動
-#   - ShellCheck によるシェルスクリプトの静的解析
-#   - Bats によるテスト実行
+# Features:
+#   - Start Docker daemon
+#   - Run ShellCheck static analysis on shell scripts
+#   - Run Bats test suite
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -17,37 +17,37 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="/tmp/shellnium-setup"
 mkdir -p "$LOG_DIR"
 
-# カラー出力
+# Colored output helpers
 green() { echo -e "\033[32m✓ $*\033[0m"; }
 yellow() { echo -e "\033[33m⏳ $*\033[0m"; }
 red() { echo -e "\033[31m✗ $*\033[0m"; }
 info() { echo -e "\033[36mℹ $*\033[0m"; }
 
 # ==============================================================================
-# 1. Claude Code on the Web 環境判定
+# 1. Detect Claude Code on the Web environment
 # ==============================================================================
 if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -z "${SANDBOX:-}" ]; then
-  info "Claude Code on the Web 環境ではありません。SANDBOX=1 を設定して強制実行できます。"
+  info "Not running in Claude Code on the Web. Set SANDBOX=1 to force execution."
   exit 0
 fi
 
 # ==============================================================================
-# 2. iptables を legacy に切り替え（Docker 用）
+# 2. Switch iptables to legacy mode (required for Docker)
 # ==============================================================================
 if command -v update-alternatives &>/dev/null; then
-  yellow "iptables を legacy モードに切り替え中..."
+  yellow "Switching iptables to legacy mode..."
   sudo update-alternatives --set iptables /usr/sbin/iptables-legacy 2>/dev/null || true
   sudo update-alternatives --set ip6tables /usr/sbin/ip6tables-legacy 2>/dev/null || true
-  green "iptables 設定完了"
+  green "iptables configuration done"
 fi
 
 # ==============================================================================
-# 3. Docker デーモン起動
+# 3. Start Docker daemon
 # ==============================================================================
 if ! docker info &>/dev/null; then
-  yellow "Docker デーモンを起動中..."
+  yellow "Starting Docker daemon..."
   sudo -E dockerd --iptables=false --bridge=none --storage-driver=vfs &>"$LOG_DIR/dockerd.log" &
-  # デーモン起動待ち（最大30秒）
+  # Wait for daemon (up to 30 seconds)
   for i in $(seq 1 30); do
     if docker info &>/dev/null; then
       break
@@ -55,61 +55,61 @@ if ! docker info &>/dev/null; then
     sleep 1
   done
   if docker info &>/dev/null; then
-    green "Docker デーモン起動完了"
+    green "Docker daemon started"
   else
-    red "Docker デーモンの起動に失敗しました。ログ: $LOG_DIR/dockerd.log"
+    red "Failed to start Docker daemon. Log: $LOG_DIR/dockerd.log"
     exit 1
   fi
 else
-  green "Docker デーモンは既に起動済み"
+  green "Docker daemon already running"
 fi
 
 # ==============================================================================
-# 4. Docker イメージのビルド
+# 4. Build Docker image
 # ==============================================================================
-yellow "Docker イメージをビルド中..."
+yellow "Building Docker image..."
 cd "$PROJECT_ROOT"
 if docker build -t shellnium:local . 2>"$LOG_DIR/docker-build.log"; then
-  green "Docker イメージビルド完了"
+  green "Docker image built successfully"
 else
-  red "Docker イメージのビルドに失敗しました。ログ: $LOG_DIR/docker-build.log"
+  red "Docker image build failed. Log: $LOG_DIR/docker-build.log"
   cat "$LOG_DIR/docker-build.log" >&2
   exit 1
 fi
 
 # ==============================================================================
-# 5. ShellCheck（静的解析）
+# 5. Run ShellCheck (static analysis)
 # ==============================================================================
-yellow "ShellCheck を実行中..."
+yellow "Running ShellCheck..."
 SHELLCHECK_EXIT=0
 docker run --rm -v "$PROJECT_ROOT:/app:ro" shellnium:local shellcheck 2>"$LOG_DIR/shellcheck.log" || SHELLCHECK_EXIT=$?
 if [ "$SHELLCHECK_EXIT" -eq 0 ]; then
-  green "ShellCheck: すべてのスクリプトが正常"
+  green "ShellCheck: all scripts passed"
 else
-  red "ShellCheck: 問題が見つかりました（exit code: $SHELLCHECK_EXIT）"
+  red "ShellCheck: issues found (exit code: $SHELLCHECK_EXIT)"
   cat "$LOG_DIR/shellcheck.log" >&2
 fi
 
 # ==============================================================================
-# 6. Bats テスト実行
+# 6. Run Bats tests
 # ==============================================================================
-yellow "Bats テストを実行中..."
+yellow "Running Bats tests..."
 BATS_EXIT=0
 docker run --rm -v "$PROJECT_ROOT:/app:ro" shellnium:local test 2>"$LOG_DIR/bats.log" || BATS_EXIT=$?
 if [ "$BATS_EXIT" -eq 0 ]; then
-  green "Bats テスト: すべてパス"
+  green "Bats tests: all passed"
 else
-  red "Bats テスト: 失敗あり（exit code: $BATS_EXIT）"
+  red "Bats tests: failures detected (exit code: $BATS_EXIT)"
   cat "$LOG_DIR/bats.log" >&2
 fi
 
 # ==============================================================================
-# 完了
+# Done
 # ==============================================================================
 echo ""
 if [ "$SHELLCHECK_EXIT" -eq 0 ] && [ "$BATS_EXIT" -eq 0 ]; then
-  green "サンドボックスセットアップ完了！すべてのチェックに成功しました。"
+  green "Sandbox setup complete! All checks passed."
 else
-  yellow "サンドボックスセットアップ完了（一部チェックに失敗があります）"
+  yellow "Sandbox setup complete (some checks failed)"
   exit 1
 fi
