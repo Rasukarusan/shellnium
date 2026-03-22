@@ -20,18 +20,15 @@ Shellnium is a Selenium WebDriver implementation for Bash/Zsh. It enables browse
 # ShellCheck on library files
 shellcheck -s bash lib/*.sh
 
-# Via Docker
-docker run --rm shellnium:local shellcheck
+# All scripts (lib + setup scripts)
+shellcheck -s bash lib/*.sh scripts/*.sh
 ```
 
 ### Testing
 
 ```bash
-# Run all Bats tests
+# Run all Bats tests (includes syntax + ShellCheck validation)
 bats --recursive tests/
-
-# Via Docker
-docker run --rm shellnium:local test
 ```
 
 ### Docker
@@ -40,12 +37,19 @@ docker run --rm shellnium:local test
 # Build image
 docker build -t shellnium:local .
 
-# Run demo
+# Run demo in headless mode
 docker run --rm --shm-size=2g shellnium:local demo.sh
 
-# Run ShellCheck + tests
+# Run ShellCheck + tests inside container
 docker run --rm shellnium:local shellcheck
 docker run --rm shellnium:local test
+```
+
+### Sandbox Setup (Claude Code on the Web)
+
+```bash
+# Start Docker daemon and install ShellCheck + Bats
+SANDBOX=1 bash scripts/sandbox-setup.sh
 ```
 
 ## Code Style
