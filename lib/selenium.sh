@@ -6,14 +6,14 @@ source "${SCRIPT_DIR}/util.sh"
 source "${SCRIPT_DIR}/core.sh"
 
 init() {
-  local sessionId=$(new_session $@)
-  BASE_URL=${ROOT}/session/$sessionId
+  local sessionId=$(new_session "$@")
+  BASE_URL="${ROOT}/session/${sessionId}"
 
   if [ "$(is_ready)" != 'true' ]; then
     printf "\e[35m[ERROR] chromedriver is not running.\e[m\n"
-    exit
+    exit 1
   fi
 }
 
 detect_version
-init $@
+init "$@"
