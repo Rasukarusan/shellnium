@@ -166,3 +166,104 @@ setup() {
   major=$(echo "$version" | cut -d. -f1)
   [[ "$major" == "131" ]]
 }
+
+# =====================
+# _get_chrome_for_testing_json tests
+# =====================
+
+@test "_get_chrome_for_testing_json returns JSON on success" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  curl() {
+    echo '{"channels":{"Stable":{"version":"120.0.6099.109"}}}'
+  }
+  export -f curl
+
+  run _get_chrome_for_testing_json "https://example.com/test.json"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"120.0.6099.109"* ]]
+}
+
+@test "_get_chrome_for_testing_json fails when curl returns empty" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  curl() {
+    echo ""
+  }
+  export -f curl
+
+  run _get_chrome_for_testing_json "https://example.com/test.json"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Failed to fetch"* ]]
+}
+
+# =====================
+# _download_chrome_headless_shell tests
+# =====================
+
+@test "_download_chrome_headless_shell returns cached binary if exists" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  local version="120.0.6099.109"
+  local test_cache="${BATS_TEST_TMPDIR}/shellnium-cache"
+  local cache_dir="${test_cache}/chrome-headless-shell-${version}"
+  mkdir -p "$cache_dir"
+  touch "${cache_dir}/chrome-headless-shell"
+  chmod +x "${cache_dir}/chrome-headless-shell"
+
+  SHELLNIUM_CACHE_DIR="$test_cache"
+  SHELLNIUM_CHROME_VERSION="$version"
+
+  run _download_chrome_headless_shell
+  [ "$status" -eq 0 ]
+  [[ "$output" == "$version" ]]
+}
+
+@test "_download_chrome_headless_shell sets SHELLNIUM_CHROME_BIN on cache hit" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  local version="120.0.6099.109"
+  local test_cache="${BATS_TEST_TMPDIR}/shellnium-cache"
+  local cache_dir="${test_cache}/chrome-headless-shell-${version}"
+  mkdir -p "$cache_dir"
+  touch "${cache_dir}/chrome-headless-shell"
+  chmod +x "${cache_dir}/chrome-headless-shell"
+
+  SHELLNIUM_CACHE_DIR="$test_cache"
+  SHELLNIUM_CHROME_VERSION="$version"
+
+  _download_chrome_headless_shell
+  [[ "$SHELLNIUM_CHROME_BIN" == "${cache_dir}/chrome-headless-shell" ]]
+}
+
+# =====================
+# _download_chromedriver version argument tests
+# =====================
+
+@test "_download_chromedriver uses provided version instead of detecting system Chrome" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  local test_cache="${BATS_TEST_TMPDIR}/shellnium-cache"
+  local cache_dir="${test_cache}/chromedriver-120.0.6099.109"
+  mkdir -p "$cache_dir"
+  touch "${cache_dir}/chromedriver"
+  chmod +x "${cache_dir}/chromedriver"
+
+  SHELLNIUM_CACHE_DIR="$test_cache"
+
+  run _download_chromedriver "120.0.6099.109"
+  [ "$status" -eq 0 ]
+  [[ "$output" == "${cache_dir}/chromedriver" ]]
+}
+
+# =====================
+# setup_chromedriver Chrome auto-download tests
+# =====================
+
+@test "setup_chromedriver skips when SHELLNIUM_DRIVER_URL is set" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  SHELLNIUM_DRIVER_URL="http://remote:9515"
+  run setup_chromedriver
+  [ "$status" -eq 0 ]
+}
