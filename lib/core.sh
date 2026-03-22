@@ -8,6 +8,10 @@ ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 # Use these with send_keys to send special keys.
 # Example: send_keys "$element" "panda${KEY_ENTER}"
 
+export KEY_BACKSPACE KEY_TAB KEY_RETURN KEY_ENTER KEY_SHIFT KEY_CONTROL
+export KEY_ALT KEY_ESCAPE KEY_SPACE
+export KEY_ARROW_LEFT KEY_ARROW_UP KEY_ARROW_RIGHT KEY_ARROW_DOWN
+
 KEY_BACKSPACE=$(printf '\xee\x80\x83')  # U+E003
 KEY_TAB=$(printf '\xee\x80\x84')        # U+E004
 KEY_RETURN=$(printf '\xee\x80\x86')     # U+E006
