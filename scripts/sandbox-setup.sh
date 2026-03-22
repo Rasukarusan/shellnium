@@ -1,16 +1,16 @@
 #!/usr/bin/env bash
-# Start Docker daemon in Claude Code on the Web (cloud sandbox) environments
+# Setup script for Claude Code on the Web (cloud sandbox) environments
 #
 # Environment detection:
 #   CLAUDE_CODE_REMOTE=true  -> Claude Code on the Web cloud environment
 #   SANDBOX=1                -> Force execution manually
 #
+# Installs ShellCheck and Bats, then makes Docker available for browser tests.
+#
 # Usage:
 #   SANDBOX=1 bash scripts/sandbox-setup.sh
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 LOG_DIR="/tmp/shellnium-setup"
 mkdir -p "$LOG_DIR"
 
@@ -28,7 +28,29 @@ if [ "${CLAUDE_CODE_REMOTE:-}" != "true" ] && [ -z "${SANDBOX:-}" ]; then
 fi
 
 # ==============================================================================
-# 2. Switch iptables to legacy mode (required for Docker)
+# 2. Install ShellCheck and Bats
+# ==============================================================================
+if ! command -v shellcheck &>/dev/null; then
+  yellow "Installing ShellCheck..."
+  sudo apt-get update -qq 2>"$LOG_DIR/apt.log"
+  sudo apt-get install -y -qq shellcheck 2>>"$LOG_DIR/apt.log"
+  green "ShellCheck installed ($(shellcheck --version | grep '^version:'))"
+else
+  green "ShellCheck already installed"
+fi
+
+if ! command -v bats &>/dev/null; then
+  yellow "Installing Bats..."
+  git clone --depth 1 https://github.com/bats-core/bats-core.git /tmp/bats-core 2>"$LOG_DIR/bats-install.log"
+  sudo /tmp/bats-core/install.sh /usr/local 2>>"$LOG_DIR/bats-install.log"
+  rm -rf /tmp/bats-core
+  green "Bats installed ($(bats --version))"
+else
+  green "Bats already installed"
+fi
+
+# ==============================================================================
+# 3. Switch iptables to legacy mode (required for Docker)
 # ==============================================================================
 if command -v update-alternatives &>/dev/null; then
   yellow "Switching iptables to legacy mode..."
@@ -38,12 +60,13 @@ if command -v update-alternatives &>/dev/null; then
 fi
 
 # ==============================================================================
-# 3. Start Docker daemon
+# 4. Start Docker daemon
 # ==============================================================================
 if ! docker info &>/dev/null; then
   yellow "Starting Docker daemon..."
-  sudo -E dockerd --iptables=false --bridge=none --storage-driver=vfs &>"$LOG_DIR/dockerd.log" &
-  for i in $(seq 1 30); do
+  # shellcheck disable=SC2024
+  sudo -E dockerd --storage-driver=vfs &>"$LOG_DIR/dockerd.log" &
+  for _ in $(seq 1 30); do
     if docker info &>/dev/null; then
       break
     fi
@@ -60,19 +83,11 @@ else
 fi
 
 # ==============================================================================
-# 4. Build Docker image
+# Done
 # ==============================================================================
-yellow "Building Docker image..."
-cd "$PROJECT_ROOT"
-if docker build -t shellnium:local . 2>"$LOG_DIR/docker-build.log"; then
-  green "Docker image built successfully"
-else
-  red "Docker image build failed. Log: $LOG_DIR/docker-build.log"
-  cat "$LOG_DIR/docker-build.log" >&2
-  exit 1
-fi
-
-green "Docker is ready. You can now run:"
-echo "  docker run --rm shellnium:local shellcheck   # Run ShellCheck"
-echo "  docker run --rm shellnium:local test          # Run Bats tests"
-echo "  docker run --rm --shm-size=2g shellnium:local demo.sh  # Run demo"
+echo ""
+green "Setup complete! Available commands:"
+echo "  shellcheck -s bash lib/*.sh          # Lint library scripts"
+echo "  bats --recursive tests/              # Run test suite"
+echo "  docker build -t shellnium:local .    # Build Docker image"
+echo "  docker run --rm shellnium:local test # Run tests in Docker"
