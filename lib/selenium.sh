@@ -2,8 +2,8 @@
 
 # Resolve location of current script, in case it's executed from another folder.
 SCRIPT_DIR="$(cd -P "$(dirname "$(realpath "${BASH_SOURCE[0]:-${0}}")")" &> /dev/null && pwd)"
-# shellcheck source=lib/util.sh
-source "${SCRIPT_DIR}/util.sh"
+# shellcheck source=lib/setup.sh
+source "${SCRIPT_DIR}/setup.sh"
 # shellcheck source=lib/core.sh
 source "${SCRIPT_DIR}/core.sh"
 
@@ -18,5 +18,6 @@ init() {
   fi
 }
 
-detect_version
+setup_chromedriver
+trap cleanup_chromedriver EXIT
 init "$@"
