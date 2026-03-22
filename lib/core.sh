@@ -8,23 +8,39 @@ ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 # Use these with send_keys to send special keys.
 # Example: send_keys "$element" "panda${KEY_ENTER}"
 
-export KEY_BACKSPACE KEY_TAB KEY_RETURN KEY_ENTER KEY_SHIFT KEY_CONTROL
-export KEY_ALT KEY_ESCAPE KEY_SPACE
+export KEY_NULL KEY_CANCEL KEY_HELP KEY_BACKSPACE KEY_TAB KEY_CLEAR
+export KEY_RETURN KEY_ENTER KEY_SHIFT KEY_CONTROL KEY_ALT KEY_PAUSE KEY_ESCAPE
+export KEY_SPACE KEY_PAGE_UP KEY_PAGE_DOWN KEY_END KEY_HOME
 export KEY_ARROW_LEFT KEY_ARROW_UP KEY_ARROW_RIGHT KEY_ARROW_DOWN
+export KEY_INSERT KEY_DELETE KEY_F1 KEY_F12 KEY_META
 
+KEY_NULL=$(printf '\xee\x80\x80')       # U+E000
+KEY_CANCEL=$(printf '\xee\x80\x81')     # U+E001
+KEY_HELP=$(printf '\xee\x80\x82')       # U+E002
 KEY_BACKSPACE=$(printf '\xee\x80\x83')  # U+E003
 KEY_TAB=$(printf '\xee\x80\x84')        # U+E004
+KEY_CLEAR=$(printf '\xee\x80\x85')      # U+E005
 KEY_RETURN=$(printf '\xee\x80\x86')     # U+E006
 KEY_ENTER=$(printf '\xee\x80\x87')      # U+E007
 KEY_SHIFT=$(printf '\xee\x80\x88')      # U+E008
 KEY_CONTROL=$(printf '\xee\x80\x89')    # U+E009
 KEY_ALT=$(printf '\xee\x80\x8a')        # U+E00A
+KEY_PAUSE=$(printf '\xee\x80\x8b')      # U+E00B
 KEY_ESCAPE=$(printf '\xee\x80\x8c')     # U+E00C
 KEY_SPACE=$(printf '\xee\x80\x8d')      # U+E00D
+KEY_PAGE_UP=$(printf '\xee\x80\x8e')    # U+E00E
+KEY_PAGE_DOWN=$(printf '\xee\x80\x8f')  # U+E00F
+KEY_END=$(printf '\xee\x80\x90')        # U+E010
+KEY_HOME=$(printf '\xee\x80\x91')       # U+E011
 KEY_ARROW_LEFT=$(printf '\xee\x80\x92') # U+E012
 KEY_ARROW_UP=$(printf '\xee\x80\x93')   # U+E013
 KEY_ARROW_RIGHT=$(printf '\xee\x80\x94') # U+E014
 KEY_ARROW_DOWN=$(printf '\xee\x80\x95') # U+E015
+KEY_INSERT=$(printf '\xee\x80\x96')     # U+E016
+KEY_DELETE=$(printf '\xee\x80\x97')     # U+E017
+KEY_F1=$(printf '\xee\x80\xb1')         # U+E031
+KEY_F12=$(printf '\xee\x80\xbc')        # U+E03C
+KEY_META=$(printf '\xee\x80\xbd')       # U+E03D
 
 _GET() {
   curl -s -X GET "$@"
@@ -411,35 +427,6 @@ fullscreen_window() {
 ##############################
 # Actions
 ##############################
-
-# W3C WebDriver key constants
-KEY_NULL='\uE000'
-KEY_CANCEL='\uE001'
-KEY_HELP='\uE002'
-KEY_BACKSPACE='\uE003'
-KEY_TAB='\uE004'
-KEY_CLEAR='\uE005'
-KEY_RETURN='\uE006'
-KEY_ENTER='\uE007'
-KEY_SHIFT='\uE008'
-KEY_CONTROL='\uE009'
-KEY_ALT='\uE00A'
-KEY_PAUSE='\uE00B'
-KEY_ESCAPE='\uE00C'
-KEY_SPACE='\uE00D'
-KEY_PAGE_UP='\uE00E'
-KEY_PAGE_DOWN='\uE00F'
-KEY_END='\uE010'
-KEY_HOME='\uE011'
-KEY_ARROW_LEFT='\uE012'
-KEY_ARROW_UP='\uE013'
-KEY_ARROW_RIGHT='\uE014'
-KEY_ARROW_DOWN='\uE015'
-KEY_INSERT='\uE016'
-KEY_DELETE='\uE017'
-KEY_F1='\uE031'
-KEY_F12='\uE03C'
-KEY_META='\uE03D'
 
 # Perform actions (low-level)
 # https://www.w3.org/TR/webdriver/#perform-actions
