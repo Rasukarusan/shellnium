@@ -2,6 +2,30 @@
 
 ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 
+##############################
+# Key Constants (W3C WebDriver)
+##############################
+# Use these with send_keys to send special keys.
+# Example: send_keys "$element" "panda${KEY_ENTER}"
+
+export KEY_BACKSPACE KEY_TAB KEY_RETURN KEY_ENTER KEY_SHIFT KEY_CONTROL
+export KEY_ALT KEY_ESCAPE KEY_SPACE
+export KEY_ARROW_LEFT KEY_ARROW_UP KEY_ARROW_RIGHT KEY_ARROW_DOWN
+
+KEY_BACKSPACE=$(printf '\xee\x80\x83')  # U+E003
+KEY_TAB=$(printf '\xee\x80\x84')        # U+E004
+KEY_RETURN=$(printf '\xee\x80\x86')     # U+E006
+KEY_ENTER=$(printf '\xee\x80\x87')      # U+E007
+KEY_SHIFT=$(printf '\xee\x80\x88')      # U+E008
+KEY_CONTROL=$(printf '\xee\x80\x89')    # U+E009
+KEY_ALT=$(printf '\xee\x80\x8a')        # U+E00A
+KEY_ESCAPE=$(printf '\xee\x80\x8c')     # U+E00C
+KEY_SPACE=$(printf '\xee\x80\x8d')      # U+E00D
+KEY_ARROW_LEFT=$(printf '\xee\x80\x92') # U+E012
+KEY_ARROW_UP=$(printf '\xee\x80\x93')   # U+E013
+KEY_ARROW_RIGHT=$(printf '\xee\x80\x94') # U+E014
+KEY_ARROW_DOWN=$(printf '\xee\x80\x95') # U+E015
+
 _GET() {
   curl -s -X GET "$@"
 }
@@ -78,7 +102,9 @@ delete_all_cookies() {
 
 navigate_to() {
   local url=$1
-  _POST -d '{"url":"'"${url}"'"}' "${BASE_URL}/url" >/dev/null
+  local payload
+  payload=$(jq -n --arg url "$url" '{url: $url}')
+  _POST -d "$payload" "${BASE_URL}/url" >/dev/null
 }
 
 get_current_url() {
@@ -148,27 +174,35 @@ set_timeout_implicit() {
 find_element() {
   local property=$1
   local value=$2
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element" | jq -r '.value.ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element" | jq -r '.value.ELEMENT'
 }
 
 find_elements() {
   local property=$1
   local value=$2
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/elements" | jq -r '.value[].ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/elements" | jq -r '.value[].ELEMENT'
 }
 
 find_element_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element/${elementId}/element" | jq -r '.value.ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/element" | jq -r '.value.ELEMENT'
 }
 
 find_elements_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element/${elementId}/elements" | jq -r '.value[].ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/elements" | jq -r '.value[].ELEMENT'
 }
 
 get_active_element() {
@@ -232,12 +266,16 @@ is_element_enabled() {
 send_keys() {
   local elementId=$1
   local value=$2
-  _POST -d "{\"value\": [\"${value}\"]}" "${BASE_URL}/element/${elementId}/value" >/dev/null
+  local payload
+  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/value" >/dev/null
 }
 
 send_alert_text() {
   local value=$1
-  _POST -d "{\"value\": [\"${value}\"]}" "${BASE_URL}/alert/text" >/dev/null
+  local payload
+  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  _POST -d "$payload" "${BASE_URL}/alert/text" >/dev/null
 }
 
 click() {
