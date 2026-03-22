@@ -55,6 +55,11 @@ new_session() {
     "--window-size=1920,1080"
     "$@"
   )
+
+  # Append headless flag when SHELLNIUM_HEADLESS is enabled
+  if [ "${SHELLNIUM_HEADLESS}" = "true" ] || [ "${SHELLNIUM_HEADLESS}" = "1" ]; then
+    allArgs+=("--headless=new")
+  fi
   chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
   _POST -d '{
     "desiredCapabilities": {
