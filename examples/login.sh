@@ -17,7 +17,7 @@ COOKIE_FILE="/tmp/shellnium_cookies.json"
 
 save_cookies() {
     echo "Saving cookies to ${COOKIE_FILE} ..."
-    get_all_cookies | jq -s '.' > "$COOKIE_FILE"
+    get_all_cookies > "$COOKIE_FILE"
     echo "Cookies saved."
 }
 
@@ -42,7 +42,7 @@ main() {
 
     # Click login button
     local login_btn
-    login_btn=$(find_element 'css selector' 'button[type="submit"]')
+    login_btn=$(find_element 'xpath' "//button[@type='submit']")
     click "$login_btn"
     echo "Clicked login button."
 

@@ -40,13 +40,13 @@ main() {
 
     # Select a pizza size (radio button)
     local size
-    size=$(find_element 'css selector' 'input[name="size"][value="medium"]')
+    size=$(find_element 'xpath' "//input[@name='size' and @value='medium']")
     click "$size"
     echo "Selected: size = medium"
 
     # Check a topping (checkbox)
     local topping
-    topping=$(find_element 'css selector' 'input[name="topping"][value="cheese"]')
+    topping=$(find_element 'xpath' "//input[@name='topping' and @value='cheese']")
     click "$topping"
     echo "Checked: topping = cheese"
 
@@ -58,7 +58,7 @@ main() {
 
     # Submit the form
     local submit_btn
-    submit_btn=$(find_element 'css selector' 'button[type="submit"]')
+    submit_btn=$(find_element 'xpath' "//button[@type='submit']")
     click "$submit_btn"
     echo "Form submitted!"
 

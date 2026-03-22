@@ -59,7 +59,7 @@ check_page_loads() {
     sleep 1
 
     local source
-    source=$(get_page_source)
+    source=$(get_source | jq -r '.value')
 
     if [ -n "$source" ] && [ ${#source} -gt 100 ]; then
         echo "PASS (page loaded, ${#source} chars)"
