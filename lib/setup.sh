@@ -190,8 +190,8 @@ setup_chromedriver() {
   export SHELLNIUM_CHROMEDRIVER_PID
 
   # Wait for chromedriver to be ready
-  local i
-  for i in $(seq 1 30); do
+  local _i
+  for _i in $(seq 1 30); do
     if _is_chromedriver_running; then
       return 0
     fi
