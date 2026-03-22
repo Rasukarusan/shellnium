@@ -78,7 +78,9 @@ delete_all_cookies() {
 
 navigate_to() {
   local url=$1
-  _POST -d '{"url":"'"${url}"'"}' "${BASE_URL}/url" >/dev/null
+  local payload
+  payload=$(jq -n --arg url "$url" '{url: $url}')
+  _POST -d "$payload" "${BASE_URL}/url" >/dev/null
 }
 
 get_current_url() {
@@ -148,27 +150,35 @@ set_timeout_implicit() {
 find_element() {
   local property=$1
   local value=$2
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element" | jq -r '.value.ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element" | jq -r '.value.ELEMENT'
 }
 
 find_elements() {
   local property=$1
   local value=$2
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/elements" | jq -r '.value[].ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/elements" | jq -r '.value[].ELEMENT'
 }
 
 find_element_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element/${elementId}/element" | jq -r '.value.ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/element" | jq -r '.value.ELEMENT'
 }
 
 find_elements_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  _POST -d "{\"using\":\"$property\", \"value\": \"$value\"}" "${BASE_URL}/element/${elementId}/elements" | jq -r '.value[].ELEMENT'
+  local payload
+  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/elements" | jq -r '.value[].ELEMENT'
 }
 
 get_active_element() {
@@ -232,12 +242,16 @@ is_element_enabled() {
 send_keys() {
   local elementId=$1
   local value=$2
-  _POST -d "{\"value\": [\"${value}\"]}" "${BASE_URL}/element/${elementId}/value" >/dev/null
+  local payload
+  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  _POST -d "$payload" "${BASE_URL}/element/${elementId}/value" >/dev/null
 }
 
 send_alert_text() {
   local value=$1
-  _POST -d "{\"value\": [\"${value}\"]}" "${BASE_URL}/alert/text" >/dev/null
+  local payload
+  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  _POST -d "$payload" "${BASE_URL}/alert/text" >/dev/null
 }
 
 click() {
