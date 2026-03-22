@@ -101,6 +101,28 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 | `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
 | `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
 
+## Examples
+
+The [`examples/`](examples/) directory contains practical scripts demonstrating common use cases:
+
+| Script | Description |
+|---|---|
+| [scraping.sh](examples/scraping.sh) | Extract data from web pages (scrapes Hacker News top stories) |
+| [form_fill.sh](examples/form_fill.sh) | Auto-fill and submit HTML forms |
+| [login.sh](examples/login.sh) | Automate login flow with cookie saving |
+| [screenshot_batch.sh](examples/screenshot_batch.sh) | Take screenshots of multiple URLs in batch |
+| [ci_smoke_test.sh](examples/ci_smoke_test.sh) | CI/CD smoke test suite with pass/fail reporting |
+| [multi_tab.sh](examples/multi_tab.sh) | Open, switch between, and manage multiple browser tabs |
+
+Run any example:
+```bash
+# With browser window
+bash examples/scraping.sh
+
+# Headless mode
+bash examples/scraping.sh --headless
+```
+
 ## Methods
 
 Shellnium provides the following methods. See [document](https://shellnium-site.vercel.app) or [core.sh](https://github.com/Rasukarusan/shellnium/blob/master/lib/core.sh) for details.
