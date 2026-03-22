@@ -28,8 +28,8 @@ main() {
     # Get the search box
     local searchBox=$(find_element 'name' 'q')
 
-    # send keys
-    send_keys $searchBox "panda\n"
+    # Send keys and press Enter
+    send_keys $searchBox "panda${KEY_ENTER}"
 }
 
 main
@@ -137,6 +137,28 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 ### Element Interaction
 
 - `send_keys` / `click` / `element_clear`
+
+### Key Constants
+
+Use these constants with `send_keys` to send special keys:
+
+```bash
+send_keys $element "hello${KEY_ENTER}"    # Type "hello" then press Enter
+send_keys $element "${KEY_TAB}"           # Press Tab
+```
+
+| Constant | Key |
+|---|---|
+| `KEY_BACKSPACE` | Backspace |
+| `KEY_TAB` | Tab |
+| `KEY_RETURN` | Return |
+| `KEY_ENTER` | Enter |
+| `KEY_SHIFT` | Shift |
+| `KEY_CONTROL` | Control |
+| `KEY_ALT` | Alt |
+| `KEY_ESCAPE` | Escape |
+| `KEY_SPACE` | Space |
+| `KEY_ARROW_LEFT` / `KEY_ARROW_UP` / `KEY_ARROW_RIGHT` / `KEY_ARROW_DOWN` | Arrow keys |
 
 ### Document
 

@@ -12,7 +12,7 @@ main() {
     local searchBox=$(find_element 'name' 'q')
 
     # Input to the search box and enter.
-    send_keys $searchBox "panda\n"
+    send_keys $searchBox "panda${KEY_ENTER}"
 
     # Wait for a few seconds to allow the search results to load and be visible.
     sleep 2
