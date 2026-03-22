@@ -24,15 +24,20 @@ is_ready() {
 
 new_session() {
   local chromeOptions
-  # Always include anti-automation-detection flag
-  local allArgs=("--disable-blink-features=AutomationControlled" "$@")
+  # Always include anti-automation-detection flags
+  local allArgs=(
+    "--disable-blink-features=AutomationControlled"
+    "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    "--window-size=1920,1080"
+    "$@"
+  )
   chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
   _POST -d '{
     "desiredCapabilities": {
       "browserName":"chrome",
       "chromeOptions": {
         "args": ['"${chromeOptions}"'],
-        "excludeSwitches": ["enable-automation"],
+        "excludeSwitches": ["enable-automation", "enable-logging"],
         "useAutomationExtension": false
       }
     }
