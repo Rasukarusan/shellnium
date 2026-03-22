@@ -43,7 +43,7 @@ page_loaded(){
 }
 
 # Sets the path to shellnium
-declare -r -- SHELLNIUM_PATH="${HOME}/git/shellnium/"
+declare -r -- SHELLNIUM_PATH="${SHELLNIUM_PATH:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)}"
 
 # Tests dependencies are met
 declare -ar -- DEPENDS=('chromedriver' 'chromium' 'setsid' 'killall' 'ps')
