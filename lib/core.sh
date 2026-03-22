@@ -407,3 +407,116 @@ minimize_window() {
 fullscreen_window() {
   _POST "${BASE_URL}/window/fullscreen" | jq -r '.value'
 }
+
+##############################
+# Actions
+##############################
+
+# W3C WebDriver key constants
+KEY_NULL='\uE000'
+KEY_CANCEL='\uE001'
+KEY_HELP='\uE002'
+KEY_BACKSPACE='\uE003'
+KEY_TAB='\uE004'
+KEY_CLEAR='\uE005'
+KEY_RETURN='\uE006'
+KEY_ENTER='\uE007'
+KEY_SHIFT='\uE008'
+KEY_CONTROL='\uE009'
+KEY_ALT='\uE00A'
+KEY_PAUSE='\uE00B'
+KEY_ESCAPE='\uE00C'
+KEY_SPACE='\uE00D'
+KEY_PAGE_UP='\uE00E'
+KEY_PAGE_DOWN='\uE00F'
+KEY_END='\uE010'
+KEY_HOME='\uE011'
+KEY_ARROW_LEFT='\uE012'
+KEY_ARROW_UP='\uE013'
+KEY_ARROW_RIGHT='\uE014'
+KEY_ARROW_DOWN='\uE015'
+KEY_INSERT='\uE016'
+KEY_DELETE='\uE017'
+KEY_F1='\uE031'
+KEY_F12='\uE03C'
+KEY_META='\uE03D'
+
+# Perform actions (low-level)
+# https://www.w3.org/TR/webdriver/#perform-actions
+perform_actions() {
+  local actions_json="$1"
+  _POST -d "$actions_json" "${BASE_URL}/actions" >/dev/null
+}
+
+# Release all actions
+release_actions() {
+  _DELETE "${BASE_URL}/actions" >/dev/null
+}
+
+# ---- Mouse Actions (convenience wrappers) ----
+
+# Move mouse to element
+mouse_move_to() {
+  local element_id="$1"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0}]}]}"
+  perform_actions "$actions"
+}
+
+# Double click on element
+double_click() {
+  local element_id="$1"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  perform_actions "$actions"
+}
+
+# Right click (context menu) on element
+right_click() {
+  local element_id="$1"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
+  perform_actions "$actions"
+}
+
+# Hover over element (alias for mouse_move_to)
+hover() {
+  mouse_move_to "$1"
+}
+
+# Drag and drop from source element to target element
+drag_and_drop() {
+  local source_id="$1"
+  local target_id="$2"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${source_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerMove\",\"duration\":250,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${target_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  perform_actions "$actions"
+}
+
+# ---- Keyboard Actions (convenience wrappers) ----
+
+# Press and release a key
+key_press() {
+  local key="$1"
+  local actions="{\"actions\":[{\"type\":\"key\",\"id\":\"keyboard\",\"actions\":[{\"type\":\"keyDown\",\"value\":\"${key}\"},{\"type\":\"keyUp\",\"value\":\"${key}\"}]}]}"
+  perform_actions "$actions"
+}
+
+# Hold a key down
+key_down() {
+  local key="$1"
+  local actions="{\"actions\":[{\"type\":\"key\",\"id\":\"keyboard\",\"actions\":[{\"type\":\"keyDown\",\"value\":\"${key}\"}]}]}"
+  perform_actions "$actions"
+}
+
+# Release a key
+key_up() {
+  local key="$1"
+  local actions="{\"actions\":[{\"type\":\"key\",\"id\":\"keyboard\",\"actions\":[{\"type\":\"keyUp\",\"value\":\"${key}\"}]}]}"
+  perform_actions "$actions"
+}
+
+# Send key combination (e.g., send_key_combo "\uE009" "a" for Ctrl+A)
+# Common modifier keys: \uE009=Ctrl, \uE008=Shift, \uE00A=Alt, \uE03D=Meta
+send_key_combo() {
+  local modifier="$1"
+  local key="$2"
+  local actions="{\"actions\":[{\"type\":\"key\",\"id\":\"keyboard\",\"actions\":[{\"type\":\"keyDown\",\"value\":\"${modifier}\"},{\"type\":\"keyDown\",\"value\":\"${key}\"},{\"type\":\"keyUp\",\"value\":\"${key}\"},{\"type\":\"keyUp\",\"value\":\"${modifier}\"}]}]}"
+  perform_actions "$actions"
+}
