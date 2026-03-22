@@ -259,7 +259,15 @@ get_source() {
 }
 
 exec_script() {
-  _POST -d "{\"script\": \"$1\", \"args\":[\"$2\"]}" "${BASE_URL}/execute/sync"
+  local script args payload
+  script=$(printf '%s' "$1" | jq -Rs '.')
+  if [ -n "$2" ]; then
+    args="[\"$2\"]"
+  else
+    args="[]"
+  fi
+  payload=$(printf '{"script": %s, "args": %s}' "$script" "$args")
+  _POST -d "$payload" "${BASE_URL}/execute/sync"
 }
 
 element_screenshot() {
