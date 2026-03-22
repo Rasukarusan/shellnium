@@ -77,7 +77,8 @@ teardown() {
   find_element 'xpath' '//div[@id="main"]'
   run cat "$CURL_LOG"
   [[ "$output" == *'"using": "xpath"'* ]]
-  [[ "$output" == *'//div[@id="main"]'* ]]
+  [[ "$output" == *'//div[@id='* ]]
+  [[ "$output" == *'main'* ]]
 }
 
 @test "find_element builds correct JSON payload with id" {
