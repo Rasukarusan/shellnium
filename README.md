@@ -132,7 +132,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 - `get_attribute` / `get_property` / `get_css_value`
 - `get_text` / `get_tag_name` / `get_rect`
-- `is_element_enabled`
+- `is_element_enabled` / `is_element_displayed`
 
 ### Element Interaction
 
@@ -150,6 +150,14 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 - `switch_to_frame` / `switch_to_parent_frame`
 - `get_window_rect` / `set_window_rect`
 - `maximize_window` / `minimize_window` / `fullscreen_window`
+
+### Wait / Retry
+
+- `wait_for_element` — Wait until an element is found (configurable timeout and polling interval)
+- `wait_for_clickable` — Wait until an element is displayed and enabled
+- `wait_for_text` — Wait until specific text appears in the page source
+- `wait_for_url` — Wait until the current URL matches a pattern
+- `retry` — Retry any command up to N times with interval
 
 ### Alerts
 
