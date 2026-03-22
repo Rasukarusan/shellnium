@@ -129,9 +129,44 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 
 | Environment Variable | Default | Description |
 |---|---|---|
+| `SHELLNIUM_HEADLESS` | (unset) | Set to `true` or `1` to enable headless mode (no visible browser window) |
 | `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom ChromeDriver URL (disables auto-setup) |
 | `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
 | `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
+
+### Headless Mode
+
+Headless mode runs Chrome without a visible browser window, which is essential for CI/CD pipelines and server-side automation.
+
+```bash
+# Enable headless mode via environment variable
+SHELLNIUM_HEADLESS=true bash demo.sh
+
+# Or export it for the entire session
+export SHELLNIUM_HEADLESS=true
+bash demo.sh
+```
+
+You can also pass `--headless` directly as a Chrome option (e.g., `bash demo.sh --headless`), but the environment variable is recommended for CI/CD environments.
+
+#### GitHub Actions Example
+
+```yaml
+name: Browser Automation
+on: [push]
+
+jobs:
+  automate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dependencies
+        run: sudo apt-get install -y jq unzip google-chrome-stable
+      - name: Run automation script
+        env:
+          SHELLNIUM_HEADLESS: true
+        run: bash demo.sh
+```
 
 ## Examples
 
