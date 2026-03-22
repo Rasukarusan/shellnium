@@ -86,6 +86,38 @@ sudo pacman -S jq unzip
 bash demo.sh
 ```
 
+### Docker
+
+Run Shellnium instantly without installing Chrome or ChromeDriver locally:
+
+```bash
+# Run the demo
+docker run --rm --shm-size=2g ghcr.io/rasukarusan/shellnium demo.sh
+
+# Run your own script
+docker run --rm --shm-size=2g -v ./my_script.sh:/app/my_script.sh ghcr.io/rasukarusan/shellnium my_script.sh
+
+# Using docker compose
+docker compose run --rm shellnium
+```
+
+Or build locally:
+
+```bash
+docker build -t shellnium .
+docker run --rm --shm-size=2g shellnium demo.sh
+```
+
+You can also run ShellCheck and unit tests inside the container:
+
+```bash
+# Run ShellCheck on library files
+docker run --rm shellnium shellcheck
+
+# Run unit tests (bats)
+docker run --rm shellnium test
+```
+
 You can pass Chrome options like `--headless`:
 ```sh
 bash demo.sh --headless --lang=es
