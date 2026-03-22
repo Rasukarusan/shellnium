@@ -48,6 +48,7 @@ set_background_image() {
 screen_clear() {
     clear
     iterm_set_background_image ''
+    rm -f "$(pwd)"/demo-image-*.jpg
 }
 
 main
