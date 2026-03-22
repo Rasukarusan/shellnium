@@ -57,34 +57,32 @@ cd shellnium
 - **bash** (4.0+) or **zsh**
 - **curl**
 - **[jq](https://stedolan.github.io/jq/)**
+- **[unzip](https://infozip.sourceforge.net/UnZip.html)**
 - **Google Chrome** / **Chromium**
-- **[ChromeDriver](https://googlechromelabs.github.io/chrome-for-testing/)** (must match your Chrome version)
+
+ChromeDriver is **automatically downloaded and managed** by Shellnium. You don't need to install it manually.
 
 #### Install dependencies
 
 **macOS:**
 ```bash
 brew install jq
-brew install --cask chromedriver
 ```
 
 **Ubuntu / Debian:**
 ```bash
-sudo apt-get install -y jq chromium-chromedriver
+sudo apt-get install -y jq unzip
 ```
 
 **Arch Linux:**
 ```bash
-sudo pacman -S jq chromium
+sudo pacman -S jq unzip
 ```
 
 ## Quick Start
 
 ```bash
-# 1. Start ChromeDriver
-chromedriver --port=9515
-
-# 2. Run a demo script
+# Just run it — ChromeDriver is set up automatically!
 bash demo.sh
 ```
 
@@ -93,26 +91,15 @@ You can pass Chrome options like `--headless`:
 bash demo.sh --headless --lang=es
 ```
 
-### Custom ChromeDriver URL
+ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on port 9515. When your script finishes, ChromeDriver is stopped automatically.
 
-By default, Shellnium connects to `http://localhost:9515`. You can override this with an environment variable:
+### Configuration
 
-```bash
-export SHELLNIUM_DRIVER_URL=http://localhost:4444
-bash demo.sh
-```
-
-### Version Matching
-
-Make sure your Chrome and ChromeDriver major versions match:
-```bash
-# Check Chrome version
-google-chrome --version        # Linux
-# /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --version  # macOS
-
-# Check ChromeDriver version
-chromedriver --version
-```
+| Environment Variable | Default | Description |
+|---|---|---|
+| `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom ChromeDriver URL (disables auto-setup) |
+| `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
+| `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
 
 ## Methods
 
