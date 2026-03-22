@@ -67,6 +67,8 @@ docker run --rm shellnium:local shellcheck
 
 **注意点:**
 - `scripts/sandbox-setup.sh` は環境変数 `CLAUDE_CODE_REMOTE=true` または `SANDBOX=1` で実行される
+- Docker デーモンは起動できるが、**`docker build` はネットワーク制限（DNS解決不可）で失敗する**。コンテナ内から外部リポジトリ（`deb.debian.org` 等）にアクセスできない
+- そのため Docker テストは CI（GitHub Actions）で実行し、サンドボックスでは ShellCheck と Bats をホスト側で直接実行する
 - Docker は `--storage-driver=vfs` で起動される（サンドボックスの制約）
 - iptables は legacy モードに切り替えられる（Docker 起動に必要）
 - セットアップログは `/tmp/shellnium-setup/` に出力される
