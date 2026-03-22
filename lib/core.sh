@@ -24,11 +24,17 @@ is_ready() {
 
 new_session() {
   local chromeOptions
-  chromeOptions=$(for i in "$@"; do printf '"%s",' "${i}"; done | sed 's/,$//')
+  # Always include anti-automation-detection flag
+  local allArgs=("--disable-blink-features=AutomationControlled" "$@")
+  chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
   _POST -d '{
     "desiredCapabilities": {
       "browserName":"chrome",
-      "chromeOptions": {"args": ['"${chromeOptions}"'] }
+      "chromeOptions": {
+        "args": ['"${chromeOptions}"'],
+        "excludeSwitches": ["enable-automation"],
+        "useAutomationExtension": false
+      }
     }
   }' "${ROOT}/session" | jq -r '.sessionId'
 }
