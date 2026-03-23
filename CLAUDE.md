@@ -47,10 +47,10 @@ docker run --rm shellnium:local test
 
 ### Claude Code on the Web での開発
 
-クラウドサンドボックス環境（Claude Code on the Web）では ShellCheck・Bats・Docker がプリインストールされていないため、最初にセットアップが必要。
+クラウドサンドボックス環境（Claude Code on the Web）では ShellCheck・Bats がプリインストールされていないため、最初にセットアップが必要。
 
 ```bash
-# 1. 環境セットアップ（ShellCheck + Bats インストール、Docker デーモン起動）
+# 1. 環境セットアップ（ShellCheck + Bats インストール）
 SANDBOX=1 bash scripts/sandbox-setup.sh
 
 # 2. リント（ShellCheck）
@@ -58,19 +58,11 @@ shellcheck -s bash -e SC1091 lib/*.sh
 
 # 3. テスト（Bats）
 bats --recursive tests/
-
-# 4. Docker でコンテナ内テスト（オプション）
-docker build -t shellnium:local .
-docker run --rm shellnium:local test
-docker run --rm shellnium:local shellcheck
 ```
 
 **注意点:**
 - `scripts/sandbox-setup.sh` は環境変数 `CLAUDE_CODE_REMOTE=true` または `SANDBOX=1` で実行される
-- Docker デーモンは起動できるが、**`docker build` はネットワーク制限（DNS解決不可）で失敗する**。コンテナ内から外部リポジトリ（`deb.debian.org` 等）にアクセスできない
-- そのため Docker テストは CI（GitHub Actions）で実行し、サンドボックスでは ShellCheck と Bats をホスト側で直接実行する
-- Docker は `--storage-driver=vfs` で起動される（サンドボックスの制約）
-- iptables は legacy モードに切り替えられる（Docker 起動に必要）
+- Docker はサンドボックスではネットワーク制限により使用不可。Docker テストは CI（GitHub Actions）で実行する
 - セットアップログは `/tmp/shellnium-setup/` に出力される
 
 ## Code Style
