@@ -445,21 +445,21 @@ release_actions() {
 # Move mouse to element
 mouse_move_to() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0}]}]}"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Double click on element
 double_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Right click (context menu) on element
 right_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
   perform_actions "$actions"
 }
 
@@ -472,7 +472,7 @@ hover() {
 drag_and_drop() {
   local source_id="$1"
   local target_id="$2"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${source_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerMove\",\"duration\":250,\"origin\":{\"element-6066-11e4-a52e-4f735466cecf\":\"${target_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${source_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pause\",\"duration\":200},{\"type\":\"pointerMove\",\"duration\":500,\"origin\":{\"ELEMENT\":\"${target_id}\"},\"x\":0,\"y\":0},{\"type\":\"pause\",\"duration\":100},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 

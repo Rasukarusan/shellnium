@@ -365,7 +365,7 @@ teardown() {
   [[ "$output" == *'"type":"pointer"'* ]]
   [[ "$output" == *'"pointerType":"mouse"'* ]]
   [[ "$output" == *'"type":"pointerMove"'* ]]
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-abc"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-abc"'* ]]
 }
 
 @test "double_click sends two pointerDown/pointerUp pairs" {
@@ -379,7 +379,7 @@ teardown() {
 
   double_click 'elem-dbl'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-dbl"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-dbl"'* ]]
   # Two pointerDown actions (button 0)
   [[ "$output" == *'"type":"pointerDown","button":0'* ]]
   [[ "$output" == *'"type":"pointerUp","button":0'* ]]
@@ -396,7 +396,7 @@ teardown() {
 
   right_click 'elem-rc'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-rc"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-rc"'* ]]
   [[ "$output" == *'"type":"pointerDown","button":2'* ]]
   [[ "$output" == *'"type":"pointerUp","button":2'* ]]
 }
@@ -413,7 +413,7 @@ teardown() {
   hover 'elem-hover'
   run cat "$CURL_LOG"
   [[ "$output" == *'"type":"pointerMove"'* ]]
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-hover"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-hover"'* ]]
 }
 
 @test "drag_and_drop sends pointerMove, pointerDown, pointerMove, pointerUp" {
@@ -427,8 +427,8 @@ teardown() {
 
   drag_and_drop 'src-elem' 'tgt-elem'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"src-elem"'* ]]
-  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"tgt-elem"'* ]]
+  [[ "$output" == *'"ELEMENT":"src-elem"'* ]]
+  [[ "$output" == *'"ELEMENT":"tgt-elem"'* ]]
   [[ "$output" == *'"type":"pointerDown","button":0'* ]]
   [[ "$output" == *'"type":"pointerUp","button":0'* ]]
 }
