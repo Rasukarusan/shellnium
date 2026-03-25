@@ -267,6 +267,16 @@ send_keys $element "${KEY_TAB}"           # Press Tab
 - `get_alert_text` / `send_alert_text`
 - `accept_alert` / `dismiss_alert`
 
+### Actions
+
+Perform low-level mouse and keyboard actions using the [W3C WebDriver Actions API](https://www.w3.org/TR/webdriver/#actions).
+
+- `perform_actions` / `release_actions` — low-level actions API
+- **Mouse:** `mouse_move_to` / `double_click` / `right_click` / `hover` / `drag_and_drop`
+- **Keyboard:** `key_press` / `key_down` / `key_up` / `send_key_combo`
+
+Key constants are available for keyboard actions (e.g., `$KEY_CONTROL`, `$KEY_SHIFT`, `$KEY_ENTER`, `$KEY_TAB`, `$KEY_ESCAPE`, `$KEY_ARROW_DOWN`, etc.).
+
 ## Contributing
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
