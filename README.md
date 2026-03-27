@@ -86,6 +86,35 @@ sudo pacman -S jq unzip
 bash demo.sh
 ```
 
+## Development
+
+For local development and agent-driven verification, use the standardized `make` targets:
+
+```bash
+# Run the standard Docker-first verification pipeline
+make ci
+```
+
+`make ci` runs local syntax checks, then runs ShellCheck and Bats inside Docker. You do not need local `shellcheck` or `bats` installations.
+
+If you want to run demos locally, install the optional runtime dependencies:
+
+```bash
+make bootstrap
+```
+
+Available targets:
+
+- `make syntax` - bash syntax checks for tracked scripts
+- `make lint` - ShellCheck on library, example, and helper scripts
+- `make test` - Bats unit and syntax tests
+- `make smoke` - headless browser smoke example
+- `make docker-test` - lint and test in Docker
+- `make docker-smoke` - smoke test in Docker
+- `make ci-local` - local lint and test for users who already have the tools installed
+
+If you are using an AI coding agent, start with the instructions in [`AGENTS.md`](AGENTS.md).
+
 ### Docker
 
 Run Shellnium instantly without installing Chrome or ChromeDriver locally:
@@ -111,11 +140,8 @@ docker run --rm --shm-size=2g shellnium demo.sh
 You can also run ShellCheck and unit tests inside the container:
 
 ```bash
-# Run ShellCheck on library files
-docker run --rm shellnium shellcheck
-
-# Run unit tests (bats)
-docker run --rm shellnium test
+# Run the container-based verification flow
+make docker-test
 ```
 
 You can pass Chrome options like `--headless`:
