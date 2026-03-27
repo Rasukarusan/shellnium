@@ -45,25 +45,25 @@ docker run --rm shellnium:local shellcheck
 docker run --rm shellnium:local test
 ```
 
-### Claude Code on the Web での開発
+### Claude Code on the Web
 
-クラウドサンドボックス環境（Claude Code on the Web）では ShellCheck・Bats がプリインストールされていないため、最初にセットアップが必要。
+ShellCheck and Bats are not pre-installed in the cloud sandbox environment (Claude Code on the Web). Run the setup script first.
 
 ```bash
-# 1. 環境セットアップ（ShellCheck + Bats インストール）
+# 1. Setup (install ShellCheck + Bats)
 SANDBOX=1 bash scripts/sandbox-setup.sh
 
-# 2. リント（ShellCheck）
+# 2. Lint (ShellCheck)
 shellcheck -s bash -e SC1091 lib/*.sh
 
-# 3. テスト（Bats）
+# 3. Test (Bats)
 bats --recursive tests/
 ```
 
-**注意点:**
-- `scripts/sandbox-setup.sh` は環境変数 `CLAUDE_CODE_REMOTE=true` または `SANDBOX=1` で実行される
-- Docker はサンドボックスではネットワーク制限により使用不可。Docker テストは CI（GitHub Actions）で実行する
-- セットアップログは `/tmp/shellnium-setup/` に出力される
+**Notes:**
+- `scripts/sandbox-setup.sh` runs when the env var `CLAUDE_CODE_REMOTE=true` or `SANDBOX=1` is set
+- Docker is unavailable in the sandbox due to network restrictions. Run Docker tests in CI (GitHub Actions) instead
+- Setup logs are written to `/tmp/shellnium-setup/`
 
 ## Code Style
 
