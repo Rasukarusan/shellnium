@@ -13,11 +13,8 @@ Thank you for your interest in contributing to Shellnium!
 ## Development Setup
 
 ```bash
-# Start ChromeDriver
-chromedriver --port=9515
-
-# Run a demo to verify everything works
-bash demo.sh
+# Standard Docker-first verification entrypoint
+make ci
 ```
 
 ## Code Style
@@ -32,6 +29,10 @@ bash demo.sh
 Before submitting a PR, verify your changes work with both `bash` and `zsh`:
 
 ```bash
+make ci
+
+# Optional: only if you run examples directly on the host
+make bootstrap
 bash demo.sh
 zsh demo.sh
 ```
