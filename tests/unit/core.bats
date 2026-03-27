@@ -325,7 +325,6 @@ teardown() {
   unset SHELLNIUM_DRIVER_URL
 }
 
-# =====================
 # new_session binary clause tests
 # =====================
 
@@ -358,4 +357,224 @@ teardown() {
   new_session
   run cat "$CURL_LOG"
   [[ "$output" != *'"binary"'* ]]
+}
+
+# =====================
+# Actions API tests
+# =====================
+
+@test "perform_actions sends POST to /actions endpoint" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  perform_actions '{"actions":[{"type":"key","id":"kb","actions":[]}]}'
+  run cat "$CURL_LOG"
+  [[ "$output" == *"POST"* ]]
+  [[ "$output" == *"${BASE_URL}/actions"* ]]
+}
+
+@test "release_actions sends DELETE to /actions endpoint" {
+  release_actions
+  run cat "$CURL_LOG"
+  [[ "$output" == *"-X DELETE"* ]]
+  [[ "$output" == *"${BASE_URL}/actions"* ]]
+}
+
+@test "mouse_move_to sends pointerMove action with element origin" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  mouse_move_to 'elem-abc'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"pointer"'* ]]
+  [[ "$output" == *'"pointerType":"mouse"'* ]]
+  [[ "$output" == *'"type":"pointerMove"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-abc"'* ]]
+}
+
+@test "double_click sends two pointerDown/pointerUp pairs" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  double_click 'elem-dbl'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"ELEMENT":"elem-dbl"'* ]]
+  # Two pointerDown actions (button 0)
+  [[ "$output" == *'"type":"pointerDown","button":0'* ]]
+  [[ "$output" == *'"type":"pointerUp","button":0'* ]]
+}
+
+@test "right_click sends pointerDown/pointerUp with button 2" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  right_click 'elem-rc'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"ELEMENT":"elem-rc"'* ]]
+  [[ "$output" == *'"type":"pointerDown","button":2'* ]]
+  [[ "$output" == *'"type":"pointerUp","button":2'* ]]
+}
+
+@test "hover delegates to mouse_move_to" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  hover 'elem-hover'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"pointerMove"'* ]]
+  [[ "$output" == *'"ELEMENT":"elem-hover"'* ]]
+}
+
+@test "drag_and_drop sends pointerMove, pointerDown, pointerMove, pointerUp" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  drag_and_drop 'src-elem' 'tgt-elem'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"ELEMENT":"src-elem"'* ]]
+  [[ "$output" == *'"ELEMENT":"tgt-elem"'* ]]
+  [[ "$output" == *'"type":"pointerDown","button":0'* ]]
+  [[ "$output" == *'"type":"pointerUp","button":0'* ]]
+}
+
+@test "key_press sends keyDown followed by keyUp" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  key_press 'a'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"key"'* ]]
+  [[ "$output" == *'"type":"keyDown","value":"a"'* ]]
+  [[ "$output" == *'"type":"keyUp","value":"a"'* ]]
+}
+
+@test "key_down sends only keyDown action" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  key_down 'b'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"keyDown","value":"b"'* ]]
+  # Should NOT contain keyUp
+  [[ "$output" != *'"type":"keyUp"'* ]]
+}
+
+@test "key_up sends only keyUp action" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  key_up 'c'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"keyUp","value":"c"'* ]]
+  # Should NOT contain keyDown
+  [[ "$output" != *'"type":"keyDown"'* ]]
+}
+
+@test "send_key_combo sends modifier keyDown, key keyDown, key keyUp, modifier keyUp" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{}'
+  }
+  export -f curl
+
+  send_key_combo "$KEY_CONTROL" 'a'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"type":"key"'* ]]
+  [[ "$output" == *"keyDown"* ]]
+  [[ "$output" == *"keyUp"* ]]
+}
+
+# =====================
+# Key constants tests
+# =====================
+
+@test "KEY_ENTER has correct W3C value (U+E007)" {
+  [[ "$KEY_ENTER" == "$(printf '\xee\x80\x87')" ]]
+}
+
+@test "KEY_TAB has correct W3C value (U+E004)" {
+  [[ "$KEY_TAB" == "$(printf '\xee\x80\x84')" ]]
+}
+
+@test "KEY_ESCAPE has correct W3C value (U+E00C)" {
+  [[ "$KEY_ESCAPE" == "$(printf '\xee\x80\x8c')" ]]
+}
+
+@test "KEY_BACKSPACE has correct W3C value (U+E003)" {
+  [[ "$KEY_BACKSPACE" == "$(printf '\xee\x80\x83')" ]]
+}
+
+@test "KEY_CONTROL has correct W3C value (U+E009)" {
+  [[ "$KEY_CONTROL" == "$(printf '\xee\x80\x89')" ]]
+}
+
+@test "KEY_SHIFT has correct W3C value (U+E008)" {
+  [[ "$KEY_SHIFT" == "$(printf '\xee\x80\x88')" ]]
+}
+
+@test "KEY_ALT has correct W3C value (U+E00A)" {
+  [[ "$KEY_ALT" == "$(printf '\xee\x80\x8a')" ]]
+}
+
+@test "KEY_META has correct W3C value (U+E03D)" {
+  [[ "$KEY_META" == "$(printf '\xee\x80\xbd')" ]]
+}
+
+@test "KEY_ARROW_DOWN has correct W3C value (U+E015)" {
+  [[ "$KEY_ARROW_DOWN" == "$(printf '\xee\x80\x95')" ]]
+}
+
+@test "KEY_F1 has correct W3C value (U+E031)" {
+  [[ "$KEY_F1" == "$(printf '\xee\x80\xb1')" ]]
+}
+
+@test "KEY_F12 has correct W3C value (U+E03C)" {
+  [[ "$KEY_F12" == "$(printf '\xee\x80\xbc')" ]]
 }
