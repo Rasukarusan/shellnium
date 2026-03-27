@@ -2,6 +2,27 @@
 
 ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 
+# Debug logging - enable with SHELLNIUM_DEBUG=true
+_shellnium_log() {
+  if [ "${SHELLNIUM_DEBUG:-}" = "true" ]; then
+    echo "[shellnium] $*" >&2
+  fi
+}
+
+# Check WebDriver error response and surface error messages to stderr
+_check_error() {
+  local response="$1"
+  local error
+  error=$(echo "$response" | jq -r '.value.error // empty' 2>/dev/null)
+  if [ -n "$error" ]; then
+    local message
+    message=$(echo "$response" | jq -r '.value.message // empty' 2>/dev/null)
+    echo "[shellnium] Error: $error - $message" >&2
+    return 1
+  fi
+  return 0
+}
+
 ##############################
 # Key Constants (W3C WebDriver)
 ##############################
@@ -43,15 +64,27 @@ KEY_F12=$(printf '\xee\x80\xbc')        # U+E03C
 KEY_META=$(printf '\xee\x80\xbd')       # U+E03D
 
 _GET() {
-  curl -s -X GET "$@"
+  _shellnium_log "GET $1"
+  local response
+  response=$(curl -s -X GET "$@")
+  _shellnium_log "Response: $response"
+  echo "$response"
 }
 
 _POST() {
-  curl -s -X POST -H "Content-Type: application/json" "$@"
+  _shellnium_log "POST ${*: -1}"
+  local response
+  response=$(curl -s -X POST -H "Content-Type: application/json" "$@")
+  _shellnium_log "Response: $response"
+  echo "$response"
 }
 
 _DELETE() {
-  curl -s -X DELETE "$@"
+  _shellnium_log "DELETE $1"
+  local response
+  response=$(curl -s -X DELETE "$@")
+  _shellnium_log "Response: $response"
+  echo "$response"
 }
 
 ##############################
@@ -90,7 +123,9 @@ new_session() {
 }
 
 delete_session() {
-  _DELETE "${BASE_URL}" > /dev/null
+  local response
+  response=$(_DELETE "${BASE_URL}")
+  _check_error "$response"
 }
 
 get_all_cookies() {
@@ -105,16 +140,22 @@ get_named_cookie() {
 add_cookie() {
   local cookie=$1
   local value="{\"cookie\": ${cookie}}"
-  _POST -d "$value" "${BASE_URL}/cookie"
+  local response
+  response=$(_POST -d "$value" "${BASE_URL}/cookie")
+  _check_error "$response"
 }
 
 delete_cookie() {
   local name=$1
-  _DELETE "${BASE_URL}/cookie/${name}" > /dev/null
+  local response
+  response=$(_DELETE "${BASE_URL}/cookie/${name}")
+  _check_error "$response"
 }
 
 delete_all_cookies() {
- 	_DELETE "${BASE_URL}/cookie" > /dev/null
+  local response
+  response=$(_DELETE "${BASE_URL}/cookie")
+  _check_error "$response"
 }
 
 ##############################
@@ -123,9 +164,10 @@ delete_all_cookies() {
 
 navigate_to() {
   local url=$1
-  local payload
+  local payload response
   payload=$(jq -n --arg url "$url" '{url: $url}')
-  _POST -d "$payload" "${BASE_URL}/url" >/dev/null
+  response=$(_POST -d "$payload" "${BASE_URL}/url")
+  _check_error "$response"
 }
 
 get_current_url() {
@@ -137,15 +179,21 @@ get_title() {
 }
 
 back() {
-  _POST "${BASE_URL}/back" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/back")
+  _check_error "$response"
 }
 
 forward() {
-  _POST "${BASE_URL}/forward" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/forward")
+  _check_error "$response"
 }
 
 refresh() {
-  _POST "${BASE_URL}/refresh" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/refresh")
+  _check_error "$response"
 }
 
 ##############################
@@ -159,22 +207,30 @@ set_timeouts() {
   local script=$1
   local pageLoad=$2
   local implicit=$3
-  _POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" "${BASE_URL}/timeouts" >/dev/null
+  local response
+  response=$(_POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" "${BASE_URL}/timeouts")
+  _check_error "$response"
 }
 
 set_timeout_script() {
   local script=$1
-  _POST -d "{\"script\": $script}" "${BASE_URL}/timeouts" >/dev/null
+  local response
+  response=$(_POST -d "{\"script\": $script}" "${BASE_URL}/timeouts")
+  _check_error "$response"
 }
 
 set_timeout_pageLoad() {
   local pageLoad=$1
-  _POST -d "{\"pageLoad\": $pageLoad}" "${BASE_URL}/timeouts" >/dev/null
+  local response
+  response=$(_POST -d "{\"pageLoad\": $pageLoad}" "${BASE_URL}/timeouts")
+  _check_error "$response"
 }
 
 set_timeout_implicit() {
   local implicit=$1
-  _POST -d "{\"implicit\": $implicit}" "${BASE_URL}/timeouts" >/dev/null
+  local response
+  response=$(_POST -d "{\"implicit\": $implicit}" "${BASE_URL}/timeouts")
+  _check_error "$response"
 }
 
 ##############################
@@ -195,35 +251,43 @@ set_timeout_implicit() {
 find_element() {
   local property=$1
   local value=$2
-  local payload
+  local payload response
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
-  _POST -d "$payload" "${BASE_URL}/element" | jq -r '.value.ELEMENT'
+  response=$(_POST -d "$payload" "${BASE_URL}/element")
+  _check_error "$response" || return 1
+  echo "$response" | jq -r '.value.ELEMENT'
 }
 
 find_elements() {
   local property=$1
   local value=$2
-  local payload
+  local payload response
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
-  _POST -d "$payload" "${BASE_URL}/elements" | jq -r '.value[].ELEMENT'
+  response=$(_POST -d "$payload" "${BASE_URL}/elements")
+  _check_error "$response" || return 1
+  echo "$response" | jq -r '.value[].ELEMENT'
 }
 
 find_element_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  local payload
+  local payload response
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
-  _POST -d "$payload" "${BASE_URL}/element/${elementId}/element" | jq -r '.value.ELEMENT'
+  response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/element")
+  _check_error "$response" || return 1
+  echo "$response" | jq -r '.value.ELEMENT'
 }
 
 find_elements_from_element() {
   local elementId=$1
   local property=$2
   local value=$3
-  local payload
+  local payload response
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
-  _POST -d "$payload" "${BASE_URL}/element/${elementId}/elements" | jq -r '.value[].ELEMENT'
+  response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/elements")
+  _check_error "$response" || return 1
+  echo "$response" | jq -r '.value[].ELEMENT'
 }
 
 get_active_element() {
@@ -287,26 +351,32 @@ is_element_enabled() {
 send_keys() {
   local elementId=$1
   local value=$2
-  local payload
+  local payload response
   payload=$(jq -n --arg value "$value" '{value: [$value]}')
-  _POST -d "$payload" "${BASE_URL}/element/${elementId}/value" >/dev/null
+  response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/value")
+  _check_error "$response"
 }
 
 send_alert_text() {
   local value=$1
-  local payload
+  local payload response
   payload=$(jq -n --arg value "$value" '{value: [$value]}')
-  _POST -d "$payload" "${BASE_URL}/alert/text" >/dev/null
+  response=$(_POST -d "$payload" "${BASE_URL}/alert/text")
+  _check_error "$response"
 }
 
 click() {
   local elementId=$1
-  _POST "${BASE_URL}/element/${elementId}/click" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/element/${elementId}/click")
+  _check_error "$response"
 }
 
 element_clear() {
   local elementId=$1
-  _POST "${BASE_URL}/element/${elementId}/clear" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/element/${elementId}/clear")
+  _check_error "$response"
 }
 
 ##############################
@@ -326,7 +396,10 @@ exec_script() {
     args="[]"
   fi
   payload=$(printf '{"script": %s, "args": %s}' "$script" "$args")
-  _POST -d "$payload" "${BASE_URL}/execute/sync"
+  local response
+  response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
+  _check_error "$response" || return 1
+  echo "$response"
 }
 
 element_screenshot() {
@@ -364,7 +437,9 @@ new_window() {
 
 switch_to_window() {
   local handle=$1
-  _POST -d "{\"name\":\"$handle\"}" "${BASE_URL}/window" >/dev/null
+  local response
+  response=$(_POST -d "{\"name\":\"$handle\"}" "${BASE_URL}/window")
+  _check_error "$response"
 }
 
 #
@@ -380,29 +455,39 @@ switch_to_frame() {
   local frameId
   frameId=$(get_attribute "$id" 'id')
   if ! echo "$frameId" | grep "stale element reference" >/dev/null ; then
-    _POST -d "{\"id\":\"$frameId\"}" "${BASE_URL}/frame" >/dev/null
+    local response
+    response=$(_POST -d "{\"id\":\"$frameId\"}" "${BASE_URL}/frame")
+    _check_error "$response"
     return
   fi
 
+  local response
   if expr "$id" : "[0-9]*$" >&/dev/null;then # is integer
-    _POST -d "{\"id\":$id}" "${BASE_URL}/frame" >/dev/null
+    response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
   else # is id
-    _POST -d "{\"id\":\"$id\"}" "${BASE_URL}/frame" >/dev/null
+    response=$(_POST -d "{\"id\":\"$id\"}" "${BASE_URL}/frame")
   fi
+  _check_error "$response"
 }
 
 switch_to_parent_frame() {
-  _POST "${BASE_URL}/frame/parent" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/frame/parent")
+  _check_error "$response"
 }
 
 dismiss_alert() {
   local handle=$1
-  _POST "${BASE_URL}/alert/dismiss" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/alert/dismiss")
+  _check_error "$response"
 }
 
 accept_alert() {
   local handle=$1
-  _POST "${BASE_URL}/alert/accept" >/dev/null
+  local response
+  response=$(_POST "${BASE_URL}/alert/accept")
+  _check_error "$response"
 }
 
 get_window_rect() {
