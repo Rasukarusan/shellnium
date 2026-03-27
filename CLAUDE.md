@@ -14,35 +14,41 @@ Shellnium is a Selenium WebDriver implementation for Bash/Zsh. It enables browse
 
 ## Common Commands
 
+### Bootstrap
+
+```bash
+# Install optional local runtime dependencies for running demos on the host
+make bootstrap
+```
+
 ### Linting
 
 ```bash
-# ShellCheck on library files
-shellcheck -s bash lib/*.sh
-
-# All scripts (lib + setup scripts)
-shellcheck -s bash lib/*.sh scripts/*.sh
+# ShellCheck on repository shell scripts
+make lint
 ```
 
 ### Testing
 
 ```bash
-# Run all Bats tests (includes syntax + ShellCheck validation)
-bats --recursive tests/
+# Run the standard Docker-first verification pipeline
+make ci
+
+# Run lint and tests locally only if the host already has shellcheck and bats
+make ci-local
 ```
 
 ### Docker
 
 ```bash
 # Build image
-docker build -t shellnium:local .
-
-# Run demo in headless mode
-docker run --rm --shm-size=2g shellnium:local demo.sh
+make docker-build
 
 # Run ShellCheck + tests inside container
-docker run --rm shellnium:local shellcheck
-docker run --rm shellnium:local test
+make docker-test
+
+# Run browser smoke test inside container
+make docker-smoke
 ```
 
 ### Claude Code on the Web
@@ -53,11 +59,8 @@ ShellCheck and Bats are not pre-installed in the cloud sandbox environment (Clau
 # 1. Setup (install ShellCheck + Bats)
 SANDBOX=1 bash scripts/sandbox-setup.sh
 
-# 2. Lint (ShellCheck)
-shellcheck -s bash -e SC1091 lib/*.sh
-
-# 3. Test (Bats)
-bats --recursive tests/
+# 2. Standard verification
+make ci
 ```
 
 **Notes:**
@@ -81,3 +84,4 @@ bats --recursive tests/
 - `lib/setup.sh` handles automatic ChromeDriver download and lifecycle management
 - ChromeDriver is auto-downloaded to `~/.cache/shellnium/` and started on port 9515
 - CI runs ShellCheck + Bats via GitHub Actions (`.github/workflows/ci.yml`)
+- `Makefile` is the canonical automation entrypoint for humans and agents
