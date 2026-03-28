@@ -5,6 +5,7 @@
 
 SHELLNIUM_CACHE_DIR="${SHELLNIUM_CACHE_DIR:-${HOME}/.cache/shellnium}"
 SHELLNIUM_PORT="${SHELLNIUM_PORT:-9515}"
+SHELLNIUM_CHROME_BIN=""
 
 _get_chrome_version() {
   local version_output
@@ -54,16 +55,109 @@ _get_platform() {
   esac
 }
 
-_download_chromedriver() {
-  local chrome_version major platform download_url cache_dir zip_file
+_get_chrome_for_testing_json() {
+  local url="$1"
+  local json
+  json=$(curl -sf "$url")
+  if [ -z "$json" ]; then
+    printf "\e[35m[ERROR] Failed to fetch Chrome for Testing info.\e[m\n" >&2
+    return 1
+  fi
+  echo "$json"
+}
 
-  chrome_version=$(_get_chrome_version)
-  if [ -z "$chrome_version" ]; then
-    printf "\e[35m[ERROR] Google Chrome is not installed.\e[m\n" >&2
+# Download chrome-headless-shell when no system Chrome is found.
+# Sets SHELLNIUM_CHROME_BIN to the downloaded binary path.
+_download_chrome_headless_shell() {
+  local platform version cache_dir download_url zip_file json
+
+  platform=$(_get_platform) || return 1
+
+  # Use specific version if set, otherwise fetch latest stable
+  if [ -n "${SHELLNIUM_CHROME_VERSION:-}" ]; then
+    version="$SHELLNIUM_CHROME_VERSION"
+  else
+    json=$(_get_chrome_for_testing_json "https://googlechromelabs.github.io/chrome-for-testing/last-known-good-versions-with-downloads.json") || return 1
+    version=$(echo "$json" | jq -r '.channels.Stable.version' 2>/dev/null)
+    if [ -z "$version" ] || [ "$version" = "null" ]; then
+      printf "\e[35m[ERROR] Could not determine latest stable Chrome version.\e[m\n" >&2
+      return 1
+    fi
+  fi
+
+  cache_dir="${SHELLNIUM_CACHE_DIR}/chrome-headless-shell-${version}"
+
+  # Return cached binary if it exists
+  if [ -x "${cache_dir}/chrome-headless-shell" ]; then
+    SHELLNIUM_CHROME_BIN="${cache_dir}/chrome-headless-shell"
+    echo "$version"
+    return 0
+  fi
+
+  mkdir -p "$cache_dir"
+
+  download_url="https://storage.googleapis.com/chrome-for-testing-public/${version}/${platform}/chrome-headless-shell-${platform}.zip"
+
+  printf "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform" >&2
+
+  zip_file="${cache_dir}/chrome-headless-shell.zip"
+  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
+    printf "\e[35m[ERROR] Failed to download chrome-headless-shell from %s\e[m\n" "$download_url" >&2
+    rm -f "$zip_file"
     return 1
   fi
 
-  major=$(_get_chrome_major_version)
+  if command -v unzip >/dev/null 2>&1; then
+    unzip -o "$zip_file" -d "$cache_dir" >/dev/null 2>&1
+  else
+    printf "\e[35m[ERROR] 'unzip' is required to extract chrome-headless-shell.\e[m\n" >&2
+    return 1
+  fi
+
+  rm -f "$zip_file"
+
+  # Find the binary (may be nested in a subdirectory)
+  local found
+  found=$(find "$cache_dir" -name 'chrome-headless-shell' -type f | head -1)
+  if [ -n "$found" ] && [ "$found" != "${cache_dir}/chrome-headless-shell" ]; then
+    # Move all files from the nested directory (shared libs may be needed)
+    local nested_dir
+    nested_dir=$(dirname "$found")
+    if [ "$nested_dir" != "$cache_dir" ]; then
+      mv "$nested_dir"/* "$cache_dir"/ 2>/dev/null
+      rm -rf "$nested_dir"
+    fi
+  fi
+
+  chmod +x "${cache_dir}/chrome-headless-shell"
+
+  if [ ! -x "${cache_dir}/chrome-headless-shell" ]; then
+    printf "\e[35m[ERROR] chrome-headless-shell binary not found after extraction.\e[m\n" >&2
+    return 1
+  fi
+
+  SHELLNIUM_CHROME_BIN="${cache_dir}/chrome-headless-shell"
+  printf "chrome-headless-shell %s ready.\n" "$version" >&2
+  echo "$version"
+}
+
+# Download ChromeDriver matching the given version (or system Chrome).
+# When a version argument is provided, it is used instead of detecting system Chrome.
+_download_chromedriver() {
+  local chrome_version major platform download_url cache_dir zip_file
+
+  # Use provided version or detect from system Chrome
+  if [ -n "$1" ]; then
+    chrome_version="$1"
+  else
+    chrome_version=$(_get_chrome_version)
+    if [ -z "$chrome_version" ]; then
+      printf "\e[35m[ERROR] Google Chrome is not installed.\e[m\n" >&2
+      return 1
+    fi
+  fi
+
+  major=$(echo "$chrome_version" | cut -d. -f1)
   platform=$(_get_platform) || return 1
   cache_dir="${SHELLNIUM_CACHE_DIR}/chromedriver-${chrome_version}"
 
@@ -80,11 +174,7 @@ _download_chromedriver() {
   if [ "$major" -ge 115 ]; then
     # Chrome for Testing API (Chrome 115+)
     local json driver_version
-    json=$(curl -sf "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json")
-    if [ -z "$json" ]; then
-      printf "\e[35m[ERROR] Failed to fetch ChromeDriver version info.\e[m\n" >&2
-      return 1
-    fi
+    json=$(_get_chrome_for_testing_json "https://googlechromelabs.github.io/chrome-for-testing/latest-versions-per-milestone-with-downloads.json") || return 1
 
     download_url=$(echo "$json" | jq -r \
       ".milestones.\"${major}\".downloads.chromedriver[] | select(.platform==\"${platform}\") | .url" 2>/dev/null)
@@ -113,7 +203,7 @@ _download_chromedriver() {
   fi
 
   zip_file="${cache_dir}/chromedriver.zip"
-  if ! curl -sfL -o "$zip_file" "$download_url"; then
+  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
     printf "\e[35m[ERROR] Failed to download ChromeDriver from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -156,7 +246,7 @@ _is_chromedriver_running() {
 # Sets SHELLNIUM_DRIVER_URL and SHELLNIUM_CHROMEDRIVER_PID (if we started it).
 setup_chromedriver() {
   # If user set a custom URL, assume they manage chromedriver themselves
-  if [ -n "$SHELLNIUM_DRIVER_URL" ]; then
+  if [ -n "${SHELLNIUM_DRIVER_URL:-}" ]; then
     return 0
   fi
 
@@ -167,21 +257,36 @@ setup_chromedriver() {
     return 0
   fi
 
+  local chrome_version chromedriver_bin
+
+  # Check if system Chrome is available
+  chrome_version=$(_get_chrome_version)
+
+  if [ -z "$chrome_version" ]; then
+    # No system Chrome found — auto-download chrome-headless-shell
+    printf "No system Chrome found. Auto-downloading chrome-headless-shell ...\n" >&2
+    # NOTE: $() runs in a subshell, so SHELLNIUM_CHROME_BIN set inside
+    # _download_chrome_headless_shell does not propagate. Reconstruct it here.
+    chrome_version=$(_download_chrome_headless_shell) || return 1
+    SHELLNIUM_CHROME_BIN="${SHELLNIUM_CACHE_DIR}/chrome-headless-shell-${chrome_version}/chrome-headless-shell"
+    export SHELLNIUM_CHROME_BIN
+    # Force headless mode since chrome-headless-shell has no GUI
+    export SHELLNIUM_HEADLESS=true
+  fi
+
   # Try system chromedriver first, then auto-download
-  local chromedriver_bin
   if command -v chromedriver >/dev/null 2>&1; then
     # Verify version matches
     local system_major chrome_major
     system_major=$(chromedriver --version 2>/dev/null | awk '{print $2}' | cut -d. -f1)
-    chrome_major=$(_get_chrome_major_version)
+    chrome_major=$(echo "$chrome_version" | cut -d. -f1)
     if [ -n "$chrome_major" ] && [ "$system_major" = "$chrome_major" ]; then
       chromedriver_bin="chromedriver"
     else
-      # Version mismatch - download the right one
-      chromedriver_bin=$(_download_chromedriver) || return 1
+      chromedriver_bin=$(_download_chromedriver "$chrome_version") || return 1
     fi
   else
-    chromedriver_bin=$(_download_chromedriver) || return 1
+    chromedriver_bin=$(_download_chromedriver "$chrome_version") || return 1
   fi
 
   # Start chromedriver in the background
@@ -204,9 +309,9 @@ setup_chromedriver() {
 
 # Stop chromedriver if we started it.
 cleanup_chromedriver() {
-  if [ -n "$SHELLNIUM_CHROMEDRIVER_PID" ]; then
-    kill "$SHELLNIUM_CHROMEDRIVER_PID" 2>/dev/null
-    wait "$SHELLNIUM_CHROMEDRIVER_PID" 2>/dev/null
+  if [ -n "${SHELLNIUM_CHROMEDRIVER_PID:-}" ]; then
+    kill "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
+    wait "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
     unset SHELLNIUM_CHROMEDRIVER_PID
   fi
 }

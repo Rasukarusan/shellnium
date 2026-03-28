@@ -96,7 +96,7 @@ is_ready() {
 }
 
 new_session() {
-  local chromeOptions
+  local chromeOptions binaryClause
   # Always include anti-automation-detection flags
   local allArgs=(
     "--disable-blink-features=AutomationControlled"
@@ -106,14 +106,22 @@ new_session() {
   )
 
   # Append headless flag when SHELLNIUM_HEADLESS is enabled
-  if [ "${SHELLNIUM_HEADLESS}" = "true" ] || [ "${SHELLNIUM_HEADLESS}" = "1" ]; then
+  if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
     allArgs+=("--headless=new")
   fi
   chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
+
+  # Point to downloaded chrome-headless-shell binary if set
+  binaryClause=""
+  if [ -n "${SHELLNIUM_CHROME_BIN:-}" ]; then
+    binaryClause=$(printf '"binary": "%s",' "$SHELLNIUM_CHROME_BIN")
+  fi
+
   _POST -d '{
     "desiredCapabilities": {
       "browserName":"chrome",
       "chromeOptions": {
+        '"${binaryClause}"'
         "args": ['"${chromeOptions}"'],
         "excludeSwitches": ["enable-automation", "enable-logging"],
         "useAutomationExtension": false
