@@ -12,7 +12,7 @@ main() {
     set_background_image
 
     # Enter one character at a time to give the feeling of typing
-    local words=('d' 'o' 'g' '\n')
+    local words=('d' 'o' 'g' "${KEY_ENTER}")
     for word in ${words[@]}; do
         send_keys $searchBox $word
         set_background_image $word

@@ -1,0 +1,5 @@
+.git
+.github
+.claude
+*.md
+!README.md

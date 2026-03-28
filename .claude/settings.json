@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(docker *)",
+      "Bash(shellcheck *)",
+      "Bash(bats *)"
+    ]
+  }
+}

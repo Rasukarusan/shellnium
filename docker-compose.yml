@@ -1,0 +1,12 @@
+services:
+  shellnium:
+    build: .
+    # Mount custom scripts into /app
+    volumes:
+      - ./:/app:ro
+    # Override CMD to run a specific script
+    # command: ["my_script.sh"]
+    environment:
+      - SHELLNIUM_CHROME_OPTS=--headless --no-sandbox --disable-dev-shm-usage --disable-gpu
+    # Increase shared memory for Chrome
+    shm_size: '2gb'
