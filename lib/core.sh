@@ -605,3 +605,160 @@ send_key_combo() {
   local actions="{\"actions\":[{\"type\":\"key\",\"id\":\"keyboard\",\"actions\":[{\"type\":\"keyDown\",\"value\":\"${modifier}\"},{\"type\":\"keyDown\",\"value\":\"${key}\"},{\"type\":\"keyUp\",\"value\":\"${key}\"},{\"type\":\"keyUp\",\"value\":\"${modifier}\"}]}]}"
   perform_actions "$actions"
 }
+
+##############################
+# Element State (Display)
+##############################
+
+is_element_displayed() {
+  local elementId=$1
+  _GET "${BASE_URL}/element/${elementId}/displayed" | jq -r '.value'
+}
+
+##############################
+# Wait / Retry
+##############################
+
+# Compare two numbers (supports float if bc is available, integer-only fallback)
+_compare_lt() {
+  local a=$1
+  local b=$2
+  if command -v bc >/dev/null 2>&1; then
+    [ "$(echo "$a < $b" | bc)" -eq 1 ]
+  else
+    [ "${a%.*}" -lt "${b%.*}" ]
+  fi
+}
+
+# Add two numbers (supports float if bc is available, integer-only fallback)
+_add() {
+  local a=$1
+  local b=$2
+  if command -v bc >/dev/null 2>&1; then
+    echo "$a + $b" | bc
+  else
+    echo $(( ${a%.*} + ${b%.*} ))
+  fi
+}
+
+# Wait until an element is found
+# usage: wait_for_element "css selector" "#my-element" [timeout_sec] [interval_sec]
+wait_for_element() {
+  local property="$1"
+  local value="$2"
+  local timeout="${3:-10}"
+  local interval="${4:-0.5}"
+  local elapsed=0
+  local element=""
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    element=$(find_element "$property" "$value" 2>/dev/null)
+    if [ -n "$element" ] && [ "$element" != "null" ]; then
+      echo "$element"
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: element not found ($property: $value) after ${timeout}s" >&2
+  return 1
+}
+
+# Wait until an element is displayed and enabled (clickable)
+# usage: wait_for_clickable "css selector" "#my-button" [timeout_sec] [interval_sec]
+wait_for_clickable() {
+  local property="$1"
+  local value="$2"
+  local timeout="${3:-10}"
+  local interval="${4:-0.5}"
+  local elapsed=0
+  local element=""
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    element=$(find_element "$property" "$value" 2>/dev/null)
+    if [ -n "$element" ] && [ "$element" != "null" ]; then
+      local displayed
+      local enabled
+      displayed=$(is_element_displayed "$element" 2>/dev/null)
+      enabled=$(is_element_enabled "$element" 2>/dev/null)
+      if [ "$displayed" = "true" ] && [ "$enabled" = "true" ]; then
+        echo "$element"
+        return 0
+      fi
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: element not clickable ($property: $value) after ${timeout}s" >&2
+  return 1
+}
+
+# Wait until specific text appears in the page source
+# usage: wait_for_text "some text" [timeout_sec] [interval_sec]
+wait_for_text() {
+  local text="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local source
+    source=$(get_page_source 2>/dev/null)
+    if echo "$source" | grep -q "$text"; then
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: text not found ('$text') after ${timeout}s" >&2
+  return 1
+}
+
+# Wait until the current URL matches a pattern (grep regex)
+# usage: wait_for_url "example\\.com/dashboard" [timeout_sec] [interval_sec]
+wait_for_url() {
+  local pattern="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local url
+    url=$(get_current_url 2>/dev/null)
+    if echo "$url" | grep -q "$pattern"; then
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: URL did not match ('$pattern') after ${timeout}s" >&2
+  return 1
+}
+
+# Retry a command up to N times
+# usage: retry <max_attempts> <interval_sec> <command> [args...]
+retry() {
+  local max_attempts="$1"
+  local interval="$2"
+  shift 2
+  local attempt=1
+  local result=""
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    if result=$("$@" 2>/dev/null) && [ -n "$result" ] && [ "$result" != "null" ]; then
+      echo "$result"
+      return 0
+    fi
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      sleep "$interval"
+    fi
+    attempt=$((attempt + 1))
+  done
+
+  echo "[shellnium] Retry failed after ${max_attempts} attempts: $*" >&2
+  return 1
+}

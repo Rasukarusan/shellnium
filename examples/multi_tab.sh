@@ -13,13 +13,44 @@
 SCRIPT_DIR="$(cd -P "$(dirname "$(realpath "${BASH_SOURCE[0]:-${0}}")")" &>/dev/null && pwd)"
 source "${SCRIPT_DIR}/../lib/selenium.sh"
 
+_create_tab_page() {
+    local num=$1
+    local title=$2
+    local color=$3
+    local tmpfile
+    tmpfile=$(mktemp /tmp/shellnium-tab${num}-XXXXXX.html)
+    cat > "$tmpfile" << HTMLEOF
+<!DOCTYPE html>
+<html>
+<head><title>${title}</title>
+<style>
+  body { font-family: sans-serif; text-align: center; padding: 60px;
+         background: ${color}; }
+  h1 { font-size: 2em; }
+</style>
+</head>
+<body>
+<h1>${title}</h1>
+<p>This is tab ${num}.</p>
+</body>
+</html>
+HTMLEOF
+    echo "$tmpfile"
+}
+
 main() {
+    local page1 page2 page3
+    page1=$(_create_tab_page 1 "Home Page" "#e3f2fd")
+    page2=$(_create_tab_page 2 "Dashboard" "#fff3e0")
+    page3=$(_create_tab_page 3 "News Feed" "#e8f5e9")
+    trap "rm -f '$page1' '$page2' '$page3'" EXIT
+
     echo "=== Multi-Tab Operations Demo ==="
     echo ""
 
     # Navigate to the first page in the initial tab
-    echo "[Tab 1] Opening example.com ..."
-    navigate_to "https://example.com"
+    echo "[Tab 1] Opening Home Page ..."
+    navigate_to "file://${page1}"
     local tab1_handle
     tab1_handle=$(get_window_handle)
     local tab1_title
@@ -33,7 +64,7 @@ main() {
     local tab2_handle
     tab2_handle=$(new_window 'tab')
     switch_to_window "$tab2_handle"
-    navigate_to "https://httpbin.org"
+    navigate_to "file://${page2}"
     sleep 1
     local tab2_title
     tab2_title=$(get_title)
@@ -46,7 +77,7 @@ main() {
     local tab3_handle
     tab3_handle=$(new_window 'tab')
     switch_to_window "$tab3_handle"
-    navigate_to "https://news.ycombinator.com"
+    navigate_to "file://${page3}"
     sleep 1
     local tab3_title
     tab3_title=$(get_title)

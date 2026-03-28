@@ -2,3 +2,4 @@ image.jpg
 screenshot.png
 screenshot_*.png
 *.DS_Store
+tmp/
