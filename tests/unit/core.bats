@@ -325,6 +325,40 @@ teardown() {
   unset SHELLNIUM_DRIVER_URL
 }
 
+# new_session binary clause tests
+# =====================
+
+@test "new_session includes binary field when SHELLNIUM_CHROME_BIN is set" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{"sessionId": "test-session"}'
+  }
+  export -f curl
+
+  SHELLNIUM_CHROME_BIN="/tmp/chrome-headless-shell"
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"binary": "/tmp/chrome-headless-shell"'* ]]
+  unset SHELLNIUM_CHROME_BIN
+}
+
+@test "new_session omits binary field when SHELLNIUM_CHROME_BIN is empty" {
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo '{"sessionId": "test-session"}'
+  }
+  export -f curl
+
+  SHELLNIUM_CHROME_BIN=""
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" != *'"binary"'* ]]
+}
+
 # =====================
 # Actions API tests
 # =====================
