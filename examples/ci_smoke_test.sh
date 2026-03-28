@@ -9,30 +9,43 @@
 #
 # Usage:
 #   bash examples/ci_smoke_test.sh --headless
-#
-# Environment variables:
-#   BASE_SITE_URL  - Base URL to test (default: https://example.com)
 # =============================================================================
 
 SCRIPT_DIR="$(cd -P "$(dirname "$(realpath "${BASH_SOURCE[0]:-${0}}")")" &>/dev/null && pwd)"
 source "${SCRIPT_DIR}/../lib/selenium.sh"
 
-BASE_SITE_URL="${BASE_SITE_URL:-https://example.com}"
-
 PASSED=0
 FAILED=0
 
+_create_test_page() {
+    local tmpfile
+    tmpfile=$(mktemp /tmp/shellnium-smoke-XXXXXX.html)
+    cat > "$tmpfile" << 'HTMLEOF'
+<!DOCTYPE html>
+<html>
+<head><title>Example Domain</title></head>
+<body>
+<div>
+  <h1>Example Domain</h1>
+  <p>This domain is for use in illustrative examples in documents.</p>
+  <p><a href="https://www.iana.org/domains/example">More information...</a></p>
+</div>
+</body>
+</html>
+HTMLEOF
+    echo "$tmpfile"
+}
+
 # Run a single test case
-# Arguments: test_name, url_path, expected_title_substring
+# Arguments: test_name, url, expected_title_substring
 run_test() {
     local test_name=$1
-    local url_path=$2
+    local url=$2
     local expected=$3
 
-    local full_url="${BASE_SITE_URL}${url_path}"
     printf "  %-40s" "${test_name}..."
 
-    navigate_to "$full_url"
+    navigate_to "$url"
     sleep 1
 
     local title
@@ -50,12 +63,11 @@ run_test() {
 # Check that a page returns non-empty content
 check_page_loads() {
     local test_name=$1
-    local url_path=$2
+    local url=$2
 
-    local full_url="${BASE_SITE_URL}${url_path}"
     printf "  %-40s" "${test_name}..."
 
-    navigate_to "$full_url"
+    navigate_to "$url"
     sleep 1
 
     local source
@@ -71,9 +83,15 @@ check_page_loads() {
 }
 
 main() {
+    local test_page
+    test_page=$(_create_test_page)
+    trap "rm -f '$test_page'" EXIT
+
+    local base_url="file://${test_page}"
+
     echo "========================================"
     echo "  Smoke Test Suite"
-    echo "  Target: ${BASE_SITE_URL}"
+    echo "  Target: ${base_url}"
     echo "========================================"
     echo ""
 
@@ -81,14 +99,14 @@ main() {
     echo ""
 
     # Test 1: Homepage loads and has expected title
-    run_test "Homepage title check" "/" "Example Domain"
+    run_test "Homepage title check" "$base_url" "Example Domain"
 
     # Test 2: Homepage has content
-    check_page_loads "Homepage content check" "/"
+    check_page_loads "Homepage content check" "$base_url"
 
     # Test 3: Check a specific element exists on the page
     printf "  %-40s" "Homepage has heading..."
-    navigate_to "${BASE_SITE_URL}/"
+    navigate_to "$base_url"
     sleep 1
     local heading
     heading=$(find_element 'tag name' 'h1')
