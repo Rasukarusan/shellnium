@@ -246,7 +246,7 @@ _is_chromedriver_running() {
 # Sets SHELLNIUM_DRIVER_URL and SHELLNIUM_CHROMEDRIVER_PID (if we started it).
 setup_chromedriver() {
   # If user set a custom URL, assume they manage chromedriver themselves
-  if [ -n "$SHELLNIUM_DRIVER_URL" ]; then
+  if [ -n "${SHELLNIUM_DRIVER_URL:-}" ]; then
     return 0
   fi
 
@@ -265,7 +265,10 @@ setup_chromedriver() {
   if [ -z "$chrome_version" ]; then
     # No system Chrome found — auto-download chrome-headless-shell
     printf "No system Chrome found. Auto-downloading chrome-headless-shell ...\n" >&2
+    # NOTE: $() runs in a subshell, so SHELLNIUM_CHROME_BIN set inside
+    # _download_chrome_headless_shell does not propagate. Reconstruct it here.
     chrome_version=$(_download_chrome_headless_shell) || return 1
+    SHELLNIUM_CHROME_BIN="${SHELLNIUM_CACHE_DIR}/chrome-headless-shell-${chrome_version}/chrome-headless-shell"
     export SHELLNIUM_CHROME_BIN
     # Force headless mode since chrome-headless-shell has no GUI
     export SHELLNIUM_HEADLESS=true
@@ -306,9 +309,9 @@ setup_chromedriver() {
 
 # Stop chromedriver if we started it.
 cleanup_chromedriver() {
-  if [ -n "$SHELLNIUM_CHROMEDRIVER_PID" ]; then
-    kill "$SHELLNIUM_CHROMEDRIVER_PID" 2>/dev/null
-    wait "$SHELLNIUM_CHROMEDRIVER_PID" 2>/dev/null
+  if [ -n "${SHELLNIUM_CHROMEDRIVER_PID:-}" ]; then
+    kill "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
+    wait "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
     unset SHELLNIUM_CHROMEDRIVER_PID
   fi
 }

@@ -73,14 +73,14 @@ new_session() {
   )
 
   # Append headless flag when SHELLNIUM_HEADLESS is enabled
-  if [ "${SHELLNIUM_HEADLESS}" = "true" ] || [ "${SHELLNIUM_HEADLESS}" = "1" ]; then
+  if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
     allArgs+=("--headless=new")
   fi
   chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
 
   # Point to downloaded chrome-headless-shell binary if set
   binaryClause=""
-  if [ -n "$SHELLNIUM_CHROME_BIN" ]; then
+  if [ -n "${SHELLNIUM_CHROME_BIN:-}" ]; then
     binaryClause=$(printf '"binary": "%s",' "$SHELLNIUM_CHROME_BIN")
   fi
 
