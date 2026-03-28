@@ -656,8 +656,7 @@ retry() {
   local result=""
 
   while [ "$attempt" -le "$max_attempts" ]; do
-    result=$("$@" 2>/dev/null)
-    if [ $? -eq 0 ] && [ -n "$result" ] && [ "$result" != "null" ]; then
+    if result=$("$@" 2>/dev/null) && [ -n "$result" ] && [ "$result" != "null" ]; then
       echo "$result"
       return 0
     fi
