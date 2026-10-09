@@ -1080,3 +1080,165 @@ assert_element_not_exists() {
   elements=$(find_elements "$property" "$value" 2>/dev/null)
   [ -z "$elements" ] || _assert_fail "an element matches ($property: $value)"
 }
+
+##############################
+# Page Introspection
+##############################
+# Discover what is on a page without knowing its selectors beforehand. Every
+# function prints JSON, and every element comes with a "selector" that can be
+# handed to find_element 'css selector'.
+
+# Helpers shared by the introspection scripts.
+_INTROSPECTION_HELPERS='
+function clean(text) { return (text || "").replace(/\s+/g, " ").trim(); }
+function visible(e) {
+  var r = e.getBoundingClientRect(), c = getComputedStyle(e);
+  return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none";
+}
+function hasUniqueId(e) {
+  return e.id && document.querySelectorAll("#" + CSS.escape(e.id)).length === 1;
+}
+function selector(e) {
+  var parts = [];
+  while (e && e.nodeType === 1 && e !== document.documentElement) {
+    if (hasUniqueId(e)) { parts.unshift("#" + CSS.escape(e.id)); break; }
+    var n = 1, s = e;
+    while ((s = s.previousElementSibling)) { if (s.tagName === e.tagName) { n++; } }
+    parts.unshift(e.tagName.toLowerCase() + ":nth-of-type(" + n + ")");
+    e = e.parentElement;
+  }
+  return parts.join(" > ");
+}
+function label(e) {
+  if (e.labels && e.labels.length) { return clean(e.labels[0].innerText); }
+  return clean(e.getAttribute("aria-label") || e.title || "");
+}
+function compact(o) {
+  Object.keys(o).forEach(function (k) { if (o[k] === "" || o[k] === null || o[k] === undefined) { delete o[k]; } });
+  return o;
+}
+'
+
+# Run a script and print its result as compact JSON.
+# usage: _exec_json "$script" [json array of arguments]
+_exec_json() {
+  local payload response
+  payload=$(jq -n --arg script "$1" --argjson args "${2:-[]}" '{script: $script, args: $args}')
+  response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -c '.value'
+}
+
+# Visible elements a user could click: links, buttons and the like.
+# usage: get_clickable_elements [max_elements]
+get_clickable_elements() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var max = arguments[0];
+    var found = document.querySelectorAll("a[href], area[href], button, summary, input[type=submit], input[type=button], input[type=reset], input[type=image], [role=button], [role=link], [onclick]");
+    var out = [];
+    for (var i = 0; i < found.length && out.length < max; i++) {
+      var e = found[i];
+      if (!visible(e) || e.disabled) { continue; }
+      out.push(compact({
+        tag: e.tagName.toLowerCase(),
+        text: clean(e.innerText || e.value || e.getAttribute("aria-label") || e.title || e.alt).slice(0, 120),
+        id: e.id,
+        name: e.getAttribute("name"),
+        type: e.getAttribute("type"),
+        href: e.href && typeof e.href === "string" ? e.href : null,
+        selector: selector(e)
+      }));
+    }
+    return out;' "[${1:-200}]"
+}
+
+# Fields of the forms on the page. Passwords are never included.
+# usage: get_form_fields
+get_form_fields() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var found = document.querySelectorAll("input, select, textarea");
+    var skipped = ["hidden", "submit", "button", "reset", "image"];
+    var out = [];
+    for (var i = 0; i < found.length; i++) {
+      var e = found[i], tag = e.tagName.toLowerCase();
+      var type = tag === "input" ? (e.getAttribute("type") || "text").toLowerCase() : tag;
+      if (skipped.indexOf(type) >= 0) { continue; }
+      var field = {
+        tag: tag,
+        type: type,
+        name: e.getAttribute("name"),
+        id: e.id,
+        label: label(e),
+        placeholder: e.getAttribute("placeholder"),
+        value: type === "password" || type === "checkbox" || type === "radio" ? null : e.value,
+        selector: selector(e)
+      };
+      if (type === "checkbox" || type === "radio") { field.checked = e.checked; field.option = e.value; }
+      if (tag === "select") {
+        field.options = Array.prototype.map.call(e.options, function (o) {
+          return compact({value: o.value, text: clean(o.text), selected: o.selected || null});
+        });
+      }
+      if (e.required) { field.required = true; }
+      if (e.disabled) { field.disabled = true; }
+      if (!visible(e)) { field.visible = false; }
+      out.push(compact(field));
+    }
+    return out;'
+}
+
+# Overview of the page: title, URL, headings, the beginning of its text and
+# its links.
+# usage: get_page_summary [max_text_chars] [max_links]
+get_page_summary() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var maxText = arguments[0], maxLinks = arguments[1];
+    var headings = [], links = [];
+    var hs = document.querySelectorAll("h1, h2, h3");
+    for (var i = 0; i < hs.length && headings.length < 30; i++) {
+      if (visible(hs[i]) && clean(hs[i].innerText)) {
+        headings.push({level: Number(hs[i].tagName.charAt(1)), text: clean(hs[i].innerText).slice(0, 120)});
+      }
+    }
+    var as = document.querySelectorAll("a[href]");
+    for (var j = 0; j < as.length && links.length < maxLinks; j++) {
+      if (visible(as[j]) && clean(as[j].innerText)) {
+        links.push({text: clean(as[j].innerText).slice(0, 80), href: as[j].href, selector: selector(as[j])});
+      }
+    }
+    var text = clean(document.body ? document.body.innerText : "");
+    return {
+      title: document.title,
+      url: location.href,
+      headings: headings,
+      text: text.slice(0, maxText),
+      textTruncated: text.length > maxText,
+      links: links,
+      linksTotal: as.length,
+      forms: document.forms.length,
+      fields: document.querySelectorAll("input:not([type=hidden]), select, textarea").length
+    };' "[${1:-2000}, ${2:-50}]"
+}
+
+# Everything about one element: tag, text, attributes, state and position.
+# usage: get_element_info "$element"
+get_element_info() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var e = arguments[0], attributes = {}, r = e.getBoundingClientRect();
+    for (var i = 0; i < e.attributes.length; i++) {
+      attributes[e.attributes[i].name] = e.attributes[i].value;
+    }
+    if (e.type === "password") { delete attributes.value; }
+    return compact({
+      tag: e.tagName.toLowerCase(),
+      text: clean(e.innerText).slice(0, 500),
+      value: e.type === "password" || typeof e.value !== "string" ? null : e.value,
+      attributes: attributes,
+      displayed: visible(e),
+      enabled: !e.disabled,
+      checked: typeof e.checked === "boolean" ? e.checked : null,
+      rect: {x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height)},
+      children: e.children.length,
+      selector: selector(e)
+    });' "[$(_element_ref "$1")]"
+}

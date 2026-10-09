@@ -1125,3 +1125,54 @@ _mock_curl() {
   run assert_title "anything"
   [ "$status" -eq 1 ]
 }
+
+# =====================
+# Page introspection
+# =====================
+
+@test "_exec_json posts the script and prints its result as compact JSON" {
+  _mock_curl '{"value": [{"tag": "a", "text": "Home"}]}'
+
+  run _exec_json 'return 1' '[5]'
+  [ "$status" -eq 0 ]
+  [ "$output" = '[{"tag":"a","text":"Home"}]' ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/execute/sync'* ]]
+  [[ "$output" == *'"script": "return 1"'* ]]
+}
+
+@test "_exec_json fails on a WebDriver error" {
+  _mock_curl '{"value": {"error": "javascript error", "message": "boom"}}'
+
+  run _exec_json 'throw 1'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"javascript error"* ]]
+}
+
+@test "get_clickable_elements limits the number of elements" {
+  _mock_curl '{"value": []}'
+
+  get_clickable_elements 25
+  run jq -sr '.[] | .args[0]?' <(grep -A200 '"script"' "$CURL_LOG" | sed -n '/^{/,/^}/p')
+  run cat "$CURL_LOG"
+  [[ "$output" == *"25"* ]]
+  [[ "$output" == *'querySelectorAll'* ]]
+}
+
+@test "get_element_info passes the element as a W3C reference" {
+  _mock_curl '{"value": {"tag": "h1"}}'
+
+  run get_element_info 'elem-9'
+  [ "$output" = '{"tag":"h1"}' ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf": "elem-9"'* ]]
+}
+
+@test "get_form_fields and get_page_summary print the JSON the page returns" {
+  _mock_curl '{"value": {"title": "T", "links": []}}'
+
+  run get_page_summary
+  [ "$output" = '{"title":"T","links":[]}' ]
+  run get_form_fields
+  [ "$status" -eq 0 ]
+}
