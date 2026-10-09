@@ -916,3 +916,101 @@ _mock_curl() {
   run _json_array
   [ "$output" = "[]" ]
 }
+
+# =====================
+# Exit codes
+# =====================
+
+@test "_check_error fails when the driver gives no response" {
+  run _check_error ""
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no response from the driver"* ]]
+}
+
+@test "_value prints the value of a successful response" {
+  run _value '{"value": "hello"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "hello" ]
+}
+
+@test "_value applies the given filter" {
+  run _value '{"value": {"handle": "w1"}}' '.value.handle'
+  [ "$output" = "w1" ]
+}
+
+@test "getters return 1 and print nothing but the error on a WebDriver error" {
+  _mock_curl '{"value": {"error": "invalid session id", "message": "gone"}}'
+
+  local fn
+  for fn in get_title get_current_url get_page_source get_window_handle get_window_handles get_all_cookies get_timeouts get_alert_text get_window_rect get_active_element; do
+    run "$fn"
+    [ "$status" -eq 1 ]
+    [ "$output" = "[shellnium] Error: invalid session id - gone" ]
+  done
+}
+
+@test "element getters return 1 on a WebDriver error" {
+  _mock_curl '{"value": {"error": "stale element reference", "message": "old"}}'
+
+  local fn
+  for fn in get_text get_tag_name get_rect is_element_enabled is_element_displayed; do
+    run "$fn" 'elem-1'
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"stale element reference"* ]]
+  done
+  run get_attribute 'elem-1' 'value'
+  [ "$status" -eq 1 ]
+  run get_property 'elem-1' 'value'
+  [ "$status" -eq 1 ]
+  run get_css_value 'elem-1' 'color'
+  [ "$status" -eq 1 ]
+}
+
+@test "getters return 1 when the driver is not reachable" {
+  curl() { return 7; }
+  export -f curl
+
+  run get_title
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no response from the driver"* ]]
+}
+
+@test "get_named_cookie returns 1 when the cookie does not exist" {
+  _mock_curl '{"value": {"error": "no such cookie", "message": "none"}}'
+
+  run get_named_cookie 'missing'
+  [ "$status" -eq 1 ]
+}
+
+@test "screenshot returns 1 and writes no file on a WebDriver error" {
+  _mock_curl '{"value": {"error": "invalid session id", "message": "gone"}}'
+
+  run screenshot "${BATS_TEST_TMPDIR}/shot.png"
+  [ "$status" -eq 1 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/shot.png" ]
+}
+
+@test "perform_actions returns 1 on a WebDriver error" {
+  _mock_curl '{"value": {"error": "move target out of bounds", "message": "outside"}}'
+
+  run perform_actions '{"actions":[]}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"move target out of bounds"* ]]
+}
+
+@test "delete_window and new_window report WebDriver errors" {
+  _mock_curl '{"value": {"error": "no such window", "message": "closed"}}'
+
+  run delete_window
+  [ "$status" -eq 1 ]
+  run new_window tab
+  [ "$status" -eq 1 ]
+}
+
+@test "getters still succeed on a normal response" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  run get_title
+  [ "$status" -eq 0 ]
+  [ "$output" = "Example Domain" ]
+}
