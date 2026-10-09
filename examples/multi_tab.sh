@@ -43,7 +43,7 @@ main() {
     page1=$(_create_tab_page 1 "Home Page" "#e3f2fd")
     page2=$(_create_tab_page 2 "Dashboard" "#fff3e0")
     page3=$(_create_tab_page 3 "News Feed" "#e8f5e9")
-    trap "rm -f '$page1' '$page2' '$page3'" EXIT
+    trap "rm -f '$page1' '$page2' '$page3'; cleanup_chromedriver" EXIT
 
     echo "=== Multi-Tab Operations Demo ==="
     echo ""
