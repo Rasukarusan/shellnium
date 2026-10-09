@@ -1052,3 +1052,76 @@ _mock_curl() {
   [ "$status" -eq 1 ]
   [[ "$output" == *"Timeout"* ]]
 }
+
+# =====================
+# Assertions
+# =====================
+
+@test "assert_url passes on the exact URL and fails otherwise" {
+  get_current_url() { echo "https://example.com/dashboard"; }
+
+  run assert_url "https://example.com/dashboard"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  run assert_url "https://example.com/"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Assertion failed: URL is 'https://example.com/dashboard', expected 'https://example.com/'"* ]]
+}
+
+@test "assert_url_contains checks a part of the URL" {
+  get_current_url() { echo "https://example.com/dashboard"; }
+
+  run assert_url_contains "/dashboard"
+  [ "$status" -eq 0 ]
+  run assert_url_contains "/login"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_title and assert_title_contains check the page title" {
+  get_title() { echo "My Dashboard"; }
+
+  run assert_title "My Dashboard"
+  [ "$status" -eq 0 ]
+  run assert_title "Dashboard"
+  [ "$status" -eq 1 ]
+  run assert_title_contains "Dashboard"
+  [ "$status" -eq 0 ]
+  run assert_title_contains "Login"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_element_text and assert_element_text_contains check the text of an element" {
+  get_text() { echo "Order submitted successfully"; }
+
+  run assert_element_text 'elem-1' "Order submitted successfully"
+  [ "$status" -eq 0 ]
+  run assert_element_text 'elem-1' "Order"
+  [ "$status" -eq 1 ]
+  run assert_element_text_contains 'elem-1' "submitted"
+  [ "$status" -eq 0 ]
+  run assert_element_text_contains 'elem-1' "failed"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_element_exists and assert_element_not_exists" {
+  find_elements() { echo "elem-1"; }
+  run assert_element_exists 'css selector' '.success'
+  [ "$status" -eq 0 ]
+  run assert_element_not_exists 'css selector' '.success'
+  [ "$status" -eq 1 ]
+
+  find_elements() { return 0; }
+  run assert_element_exists 'css selector' '.success'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no element matches (css selector: .success)"* ]]
+  run assert_element_not_exists 'css selector' '.success'
+  [ "$status" -eq 0 ]
+}
+
+@test "assertions fail when the browser cannot be asked" {
+  get_title() { return 1; }
+
+  run assert_title "anything"
+  [ "$status" -eq 1 ]
+}
