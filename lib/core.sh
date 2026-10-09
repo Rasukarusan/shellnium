@@ -619,26 +619,14 @@ is_element_displayed() {
 # Wait / Retry
 ##############################
 
-# Compare two numbers (supports float if bc is available, integer-only fallback)
+# Compare two numbers, which may have decimals
 _compare_lt() {
-  local a=$1
-  local b=$2
-  if command -v bc >/dev/null 2>&1; then
-    [ "$(echo "$a < $b" | bc)" -eq 1 ]
-  else
-    [ "${a%.*}" -lt "${b%.*}" ]
-  fi
+  awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'
 }
 
-# Add two numbers (supports float if bc is available, integer-only fallback)
+# Add two numbers, which may have decimals
 _add() {
-  local a=$1
-  local b=$2
-  if command -v bc >/dev/null 2>&1; then
-    echo "$a + $b" | bc
-  else
-    echo $(( ${a%.*} + ${b%.*} ))
-  fi
+  awk -v a="$1" -v b="$2" 'BEGIN { print a + b }'
 }
 
 # Wait until an element is found
