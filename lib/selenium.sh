@@ -9,11 +9,11 @@ source "${SCRIPT_DIR}/core.sh"
 
 init() {
   local sessionId
-  sessionId=$(new_session "$@")
+  sessionId=$(_plain new_session "$@")
   export BASE_URL="${ROOT}/session/${sessionId}"
 
   if [ -z "$sessionId" ] || [ "$sessionId" = "null" ]; then
-    printf "\e[35m[ERROR] Could not start a %s session.\e[m\n" "$SHELLNIUM_BROWSER"
+    printf "\e[35m[ERROR] Could not start a %s session.\e[m\n" "$SHELLNIUM_BROWSER" >&2
     exit 1
   fi
 }
