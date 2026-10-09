@@ -924,6 +924,50 @@ wait_for_url() {
   return 1
 }
 
+# Wait until the current URL contains a string
+# usage: wait_for_url_contains "/dashboard" [timeout_sec] [interval_sec]
+wait_for_url_contains() {
+  local text="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local url
+    url=$(get_current_url 2>/dev/null)
+    if printf '%s\n' "$url" | grep -qF -- "$text"; then
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: URL did not contain '$text' after ${timeout}s" >&2
+  return 1
+}
+
+# Wait until the page title contains a string
+# usage: wait_for_title_contains "Dashboard" [timeout_sec] [interval_sec]
+wait_for_title_contains() {
+  local text="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local title
+    title=$(get_title 2>/dev/null)
+    if printf '%s\n' "$title" | grep -qF -- "$text"; then
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  echo "[shellnium] Timeout: title did not contain '$text' after ${timeout}s" >&2
+  return 1
+}
+
 # Retry a command up to N times
 # usage: retry <max_attempts> <interval_sec> <command> [args...]
 retry() {
