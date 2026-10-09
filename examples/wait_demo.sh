@@ -115,7 +115,7 @@ HTMLEOF
 main() {
     local html_file
     html_file=$(_create_test_html)
-    trap "rm -f '$html_file'; cleanup_chromedriver" EXIT
+    trap "rm -f '$html_file'; cleanup_driver" EXIT
 
     local html_path="file://${html_file}"
     echo "Navigating to ${html_path} ..."
