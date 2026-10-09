@@ -605,3 +605,35 @@ teardown() {
   [[ "$output" == *"Timeout"* ]]
   [ "$(wc -l < "${BATS_TEST_TMPDIR}/sleeps.log")" -eq 4 ]
 }
+
+# =====================
+# zsh compatibility
+# =====================
+
+@test "responses with backslashes survive under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"line1\\nline2 \\\\ end\"}"; }
+    get_page_source
+  ' zsh "$SHELLNIUM_DIR"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "line1" ]
+  [ "${lines[1]}" = 'line2 \ end' ]
+}
+
+@test "screenshot does not clobber PATH under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"aGVsbG8=\"}"; }
+    screenshot "$2/shot.png" && element_screenshot elem "$2/element.png"
+    cat "$2/shot.png" "$2/element.png"
+  ' zsh "$SHELLNIUM_DIR" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [ "$output" = "hellohello" ]
+}

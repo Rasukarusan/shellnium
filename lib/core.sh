@@ -13,10 +13,10 @@ _shellnium_log() {
 _check_error() {
   local response="$1"
   local error
-  error=$(echo "$response" | jq -r '.value.error // empty' 2>/dev/null)
+  error=$(printf '%s\n' "$response" | jq -r '.value.error // empty' 2>/dev/null)
   if [ -n "$error" ]; then
     local message
-    message=$(echo "$response" | jq -r '.value.message // empty' 2>/dev/null)
+    message=$(printf '%s\n' "$response" | jq -r '.value.message // empty' 2>/dev/null)
     echo "[shellnium] Error: $error - $message" >&2
     return 1
   fi
@@ -68,7 +68,7 @@ _GET() {
   local response
   response=$(curl -s -X GET "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 _POST() {
@@ -76,7 +76,7 @@ _POST() {
   local response
   response=$(curl -s -X POST -H "Content-Type: application/json" "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 _DELETE() {
@@ -84,7 +84,7 @@ _DELETE() {
   local response
   response=$(curl -s -X DELETE "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 ##############################
@@ -263,7 +263,7 @@ find_element() {
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/element")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value.ELEMENT'
+  printf '%s\n' "$response" | jq -r '.value.ELEMENT'
 }
 
 find_elements() {
@@ -273,7 +273,7 @@ find_elements() {
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/elements")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value[].ELEMENT'
+  printf '%s\n' "$response" | jq -r '.value[].ELEMENT'
 }
 
 find_element_from_element() {
@@ -284,7 +284,7 @@ find_element_from_element() {
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/element")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value.ELEMENT'
+  printf '%s\n' "$response" | jq -r '.value.ELEMENT'
 }
 
 find_elements_from_element() {
@@ -295,7 +295,7 @@ find_elements_from_element() {
   payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/elements")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value[].ELEMENT'
+  printf '%s\n' "$response" | jq -r '.value[].ELEMENT'
 }
 
 get_active_element() {
@@ -407,18 +407,18 @@ exec_script() {
   local response
   response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
   _check_error "$response" || return 1
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 element_screenshot() {
   local elementId=$1
-  local path=${2:-./screenshot.png}
-  _GET "${BASE_URL}/element/${elementId}/screenshot" | jq -r '.value' | base64 -d > "$path"
+  local file=${2:-./screenshot.png}
+  _GET "${BASE_URL}/element/${elementId}/screenshot" | jq -r '.value' | base64 -d > "$file"
 }
 
 screenshot() {
-  local path=${1:-./screenshot.png}
-  _GET "${BASE_URL}/screenshot" | jq -r '.value' | base64 -d > "$path"
+  local file=${1:-./screenshot.png}
+  _GET "${BASE_URL}/screenshot" | jq -r '.value' | base64 -d > "$file"
 }
 
 
@@ -462,7 +462,7 @@ switch_to_frame() {
   # is element
   local frameId
   frameId=$(get_attribute "$id" 'id')
-  if ! echo "$frameId" | grep "stale element reference" >/dev/null ; then
+  if ! printf '%s\n' "$frameId" | grep "stale element reference" >/dev/null ; then
     local response
     response=$(_POST -d "{\"id\":\"$frameId\"}" "${BASE_URL}/frame")
     _check_error "$response"
@@ -642,7 +642,7 @@ wait_for_element() {
   while _compare_lt "$elapsed" "$timeout"; do
     element=$(find_element "$property" "$value" 2>/dev/null)
     if [ -n "$element" ] && [ "$element" != "null" ]; then
-      echo "$element"
+      printf '%s\n' "$element"
       return 0
     fi
     sleep "$interval"
@@ -671,7 +671,7 @@ wait_for_clickable() {
       displayed=$(is_element_displayed "$element" 2>/dev/null)
       enabled=$(is_element_enabled "$element" 2>/dev/null)
       if [ "$displayed" = "true" ] && [ "$enabled" = "true" ]; then
-        echo "$element"
+        printf '%s\n' "$element"
         return 0
       fi
     fi
@@ -694,7 +694,7 @@ wait_for_text() {
   while _compare_lt "$elapsed" "$timeout"; do
     local source
     source=$(get_page_source 2>/dev/null)
-    if echo "$source" | grep -q "$text"; then
+    if printf '%s\n' "$source" | grep -q "$text"; then
       return 0
     fi
     sleep "$interval"
@@ -716,7 +716,7 @@ wait_for_url() {
   while _compare_lt "$elapsed" "$timeout"; do
     local url
     url=$(get_current_url 2>/dev/null)
-    if echo "$url" | grep -q "$pattern"; then
+    if printf '%s\n' "$url" | grep -q "$pattern"; then
       return 0
     fi
     sleep "$interval"
@@ -738,7 +738,7 @@ retry() {
 
   while [ "$attempt" -le "$max_attempts" ]; do
     if result=$("$@" 2>/dev/null) && [ -n "$result" ] && [ "$result" != "null" ]; then
-      echo "$result"
+      printf '%s\n' "$result"
       return 0
     fi
     if [ "$attempt" -lt "$max_attempts" ]; then
