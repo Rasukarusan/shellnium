@@ -991,3 +991,92 @@ retry() {
   echo "[shellnium] Retry failed after ${max_attempts} attempts: $*" >&2
   return 1
 }
+
+##############################
+# Assertions
+##############################
+# Check that an action had the intended effect. They print nothing and return
+# 0 when the check holds; otherwise they explain the difference on stderr and
+# return 1.
+
+_assert_fail() {
+  echo "[shellnium] Assertion failed: $1" >&2
+  return 1
+}
+
+# usage: assert_url "https://example.com/dashboard"
+assert_url() {
+  local expected="$1"
+  local actual
+  actual=$(get_current_url) || return 1
+  [ "$actual" = "$expected" ] || _assert_fail "URL is '$actual', expected '$expected'"
+}
+
+# usage: assert_url_contains "/dashboard"
+assert_url_contains() {
+  local expected="$1"
+  local actual
+  actual=$(get_current_url) || return 1
+  case "$actual" in
+    *"$expected"*) return 0 ;;
+  esac
+  _assert_fail "URL is '$actual', expected it to contain '$expected'"
+}
+
+# usage: assert_title "Dashboard"
+assert_title() {
+  local expected="$1"
+  local actual
+  actual=$(get_title) || return 1
+  [ "$actual" = "$expected" ] || _assert_fail "title is '$actual', expected '$expected'"
+}
+
+# usage: assert_title_contains "Dash"
+assert_title_contains() {
+  local expected="$1"
+  local actual
+  actual=$(get_title) || return 1
+  case "$actual" in
+    *"$expected"*) return 0 ;;
+  esac
+  _assert_fail "title is '$actual', expected it to contain '$expected'"
+}
+
+# usage: assert_element_text "$element" "Success"
+assert_element_text() {
+  local elementId="$1"
+  local expected="$2"
+  local actual
+  actual=$(get_text "$elementId") || return 1
+  [ "$actual" = "$expected" ] || _assert_fail "element text is '$actual', expected '$expected'"
+}
+
+# usage: assert_element_text_contains "$element" "Succ"
+assert_element_text_contains() {
+  local elementId="$1"
+  local expected="$2"
+  local actual
+  actual=$(get_text "$elementId") || return 1
+  case "$actual" in
+    *"$expected"*) return 0 ;;
+  esac
+  _assert_fail "element text is '$actual', expected it to contain '$expected'"
+}
+
+# usage: assert_element_exists 'css selector' '.success'
+assert_element_exists() {
+  local property="$1"
+  local value="$2"
+  local elements
+  elements=$(find_elements "$property" "$value" 2>/dev/null)
+  [ -n "$elements" ] || _assert_fail "no element matches ($property: $value)"
+}
+
+# usage: assert_element_not_exists 'css selector' '.error'
+assert_element_not_exists() {
+  local property="$1"
+  local value="$2"
+  local elements
+  elements=$(find_elements "$property" "$value" 2>/dev/null)
+  [ -z "$elements" ] || _assert_fail "an element matches ($property: $value)"
+}
