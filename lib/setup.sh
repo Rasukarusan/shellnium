@@ -101,7 +101,7 @@ _download_chrome_headless_shell() {
   printf "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform" >&2
 
   zip_file="${cache_dir}/chrome-headless-shell.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
+  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download chrome-headless-shell from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -203,7 +203,7 @@ _download_chromedriver() {
   fi
 
   zip_file="${cache_dir}/chromedriver.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
+  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download ChromeDriver from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
