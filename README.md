@@ -176,6 +176,21 @@ SHELLNIUM_DEBUG=true bash demo.sh
 
 Debug output is written to stderr so it won't interfere with your script's normal output. WebDriver errors (e.g., element not found, stale element reference) are always surfaced to stderr regardless of debug mode.
 
+#### Session Control
+
+Sourcing `lib/selenium.sh` starts the driver and opens the browser right away. To load the functions only and decide later, pass `--no-init`:
+
+```bash
+source lib/selenium.sh --no-init   # load the library only
+start_session --headless           # start the driver and open the browser
+navigate_to 'https://example.com'
+end_session                        # close the browser and stop the driver
+```
+
+`start_session` takes the same browser arguments as `source lib/selenium.sh`, plus `--headless`, which works for any browser. Call it directly, not inside `$( )`. A script can open several sessions one after another.
+
+`source lib/selenium.sh --agent` is a shortcut for AI agents: headless mode, JSON output and only errors on stderr.
+
 #### Exit Codes and JSON Output
 
 Every function returns a non-zero exit code when the browser reports an error (element not found, session gone, script failed...), prints the error on stderr and nothing on stdout, so `$?`, `||` and `set -e` work as expected:
@@ -268,6 +283,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Session
 
+- `start_session` / `end_session`
 - `is_ready`
 - `new_session`
 - `delete_session`
