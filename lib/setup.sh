@@ -279,6 +279,7 @@ setup_chromedriver() {
   fi
 
   export SHELLNIUM_DRIVER_URL="http://localhost:${SHELLNIUM_PORT}"
+  _SHELLNIUM_DRIVER_URL_IS_OURS=true
 
   # Already running? Nothing to do.
   if _is_chromedriver_running; then
@@ -455,6 +456,7 @@ setup_geckodriver() {
   fi
 
   export SHELLNIUM_DRIVER_URL="http://localhost:${SHELLNIUM_PORT}"
+  _SHELLNIUM_DRIVER_URL_IS_OURS=true
 
   # Already running? Nothing to do.
   if _is_driver_running; then
@@ -519,5 +521,10 @@ cleanup_driver() {
     kill "${SHELLNIUM_DRIVER_PID}" 2>/dev/null
     wait "${SHELLNIUM_DRIVER_PID}" 2>/dev/null
     unset SHELLNIUM_DRIVER_PID
+  fi
+  # Forget the URL we chose, so that a later start_session sets the driver
+  # up again instead of taking it for one managed by the user.
+  if [ "${_SHELLNIUM_DRIVER_URL_IS_OURS:-}" = true ]; then
+    unset SHELLNIUM_DRIVER_URL _SHELLNIUM_DRIVER_URL_IS_OURS
   fi
 }
