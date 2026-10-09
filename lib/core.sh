@@ -88,6 +88,29 @@ _DELETE() {
 }
 
 ##############################
+# Element references
+##############################
+
+# Key under which the W3C WebDriver protocol returns an element reference.
+# https://www.w3.org/TR/webdriver/#elements
+W3C_ELEMENT_KEY="element-6066-11e4-a52e-4f735466cecf"
+
+# Read the element id(s) out of a find-element response. Drivers that still
+# answer in the legacy JSON Wire format use the "ELEMENT" key instead.
+_element_id() {
+  jq -r --arg key "$W3C_ELEMENT_KEY" '.value | (.[$key] // .ELEMENT)'
+}
+
+_element_ids() {
+  jq -r --arg key "$W3C_ELEMENT_KEY" '.value[] | (.[$key] // .ELEMENT)'
+}
+
+# Build the JSON reference to an element, as expected in request payloads.
+_element_ref() {
+  jq -cn --arg key "$W3C_ELEMENT_KEY" --arg id "$1" '{($key): $id, ELEMENT: $id}'
+}
+
+##############################
 # Session
 ##############################
 
@@ -117,17 +140,22 @@ new_session() {
     binaryClause=$(printf '"binary": "%s",' "$SHELLNIUM_CHROME_BIN")
   fi
 
-  _POST -d '{
-    "desiredCapabilities": {
-      "browserName":"chrome",
-      "chromeOptions": {
-        '"${binaryClause}"'
-        "args": ['"${chromeOptions}"'],
-        "excludeSwitches": ["enable-automation", "enable-logging"],
-        "useAutomationExtension": false
+  local response
+  response=$(_POST -d '{
+    "capabilities": {
+      "alwaysMatch": {
+        "browserName": "chrome",
+        "goog:chromeOptions": {
+          '"${binaryClause}"'
+          "args": ['"${chromeOptions}"'],
+          "excludeSwitches": ["enable-automation", "enable-logging"],
+          "useAutomationExtension": false
+        }
       }
     }
-  }' "${ROOT}/session" | jq -r '.sessionId'
+  }' "${ROOT}/session")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r '.value.sessionId // .sessionId'
 }
 
 delete_session() {
@@ -188,19 +216,19 @@ get_title() {
 
 back() {
   local response
-  response=$(_POST "${BASE_URL}/back")
+  response=$(_POST -d '{}' "${BASE_URL}/back")
   _check_error "$response"
 }
 
 forward() {
   local response
-  response=$(_POST "${BASE_URL}/forward")
+  response=$(_POST -d '{}' "${BASE_URL}/forward")
   _check_error "$response"
 }
 
 refresh() {
   local response
-  response=$(_POST "${BASE_URL}/refresh")
+  response=$(_POST -d '{}' "${BASE_URL}/refresh")
   _check_error "$response"
 }
 
@@ -256,24 +284,36 @@ set_timeout_implicit() {
 #   - "class name"
 #   - "xpath"
 #
+# The W3C protocol only knows "css selector", "link text", "partial link
+# text", "tag name" and "xpath". The other strategies are expressed as CSS.
+_locator() {
+  jq -n --arg using "$1" --arg value "$2" '
+    def quoted: "\"" + ($value | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) + "\"";
+    if   $using == "id"         then {using: "css selector", value: ("[id=" + quoted + "]")}
+    elif $using == "name"       then {using: "css selector", value: ("[name=" + quoted + "]")}
+    elif $using == "class name" then {using: "css selector", value: ("." + $value)}
+    else {using: $using, value: $value}
+    end'
+}
+
 find_element() {
   local property=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r '.value.ELEMENT'
+  printf '%s\n' "$response" | _element_id
 }
 
 find_elements() {
   local property=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/elements")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r '.value[].ELEMENT'
+  printf '%s\n' "$response" | _element_ids
 }
 
 find_element_from_element() {
@@ -281,10 +321,10 @@ find_element_from_element() {
   local property=$2
   local value=$3
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/element")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r '.value.ELEMENT'
+  printf '%s\n' "$response" | _element_id
 }
 
 find_elements_from_element() {
@@ -292,14 +332,14 @@ find_elements_from_element() {
   local property=$2
   local value=$3
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/elements")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r '.value[].ELEMENT'
+  printf '%s\n' "$response" | _element_ids
 }
 
 get_active_element() {
-  _GET "${BASE_URL}/element/active" | jq -r '.value.ELEMENT'
+  _GET "${BASE_URL}/element/active" | _element_id
 }
 
 get_alert_text() {
@@ -310,7 +350,44 @@ get_alert_text() {
 # Element State
 ##############################
 
+# Selenium-style attribute lookup. The W3C "Get Element Attribute" command
+# only returns what is written in the HTML, so the current value of an input
+# or the state of a checkbox would be lost. This mirrors what the drivers did
+# in legacy mode (and what Selenium clients still do): prefer the live
+# property, and fall back to the attribute.
+_GET_ATTRIBUTE_SCRIPT='
+var e = arguments[0], n = arguments[1], l = n.toLowerCase();
+var booleans = ["async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "hidden", "loop", "multiple", "muted", "novalidate", "open", "readonly", "required", "reversed", "selected"];
+var aliases = {"class": "className", "readonly": "readOnly"};
+if (l === "style") { return e.style.cssText; }
+if (l === "selected" || l === "checked") {
+  var on = e.tagName === "OPTION" ? e.selected : e.checked;
+  return on ? "true" : null;
+}
+if (booleans.indexOf(l) >= 0) {
+  return (e.hasAttribute(n) || e[aliases[l] || n] === true) ? "true" : null;
+}
+if ((e.tagName === "A" && l === "href") || (e.tagName === "IMG" && l === "src")) {
+  return e.hasAttribute(n) ? e[l] : null;
+}
+var p = e[aliases[n] || n];
+if (p === null || p === undefined || typeof p === "object" || typeof p === "function") {
+  return e.getAttribute(n);
+}
+return String(p);'
+
 get_attribute() {
+  local elementId=$1
+  local name=$2
+  local payload
+  payload=$(jq -n --arg script "$_GET_ATTRIBUTE_SCRIPT" --argjson element "$(_element_ref "$elementId")" --arg name "$name" \
+    '{script: $script, args: [$element, $name]}')
+  _POST -d "$payload" "${BASE_URL}/execute/sync" | jq -r '.value'
+}
+
+# The attribute exactly as written in the HTML, or null when it is absent.
+# https://www.w3.org/TR/webdriver/#get-element-attribute
+get_dom_attribute() {
   local elementId=$1
   local name=$2
   _GET "${BASE_URL}/element/${elementId}/attribute/${name}" | jq -r '.value'
@@ -360,7 +437,7 @@ send_keys() {
   local elementId=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  payload=$(jq -n --arg value "$value" '{text: $value, value: [$value]}')
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/value")
   _check_error "$response"
 }
@@ -368,7 +445,7 @@ send_keys() {
 send_alert_text() {
   local value=$1
   local payload response
-  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  payload=$(jq -n --arg value "$value" '{text: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/alert/text")
   _check_error "$response"
 }
@@ -376,14 +453,14 @@ send_alert_text() {
 click() {
   local elementId=$1
   local response
-  response=$(_POST "${BASE_URL}/element/${elementId}/click")
+  response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/click")
   _check_error "$response"
 }
 
 element_clear() {
   local elementId=$1
   local response
-  response=$(_POST "${BASE_URL}/element/${elementId}/clear")
+  response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/clear")
   _check_error "$response"
 }
 
@@ -446,7 +523,7 @@ new_window() {
 switch_to_window() {
   local handle=$1
   local response
-  response=$(_POST -d "{\"name\":\"$handle\"}" "${BASE_URL}/window")
+  response=$(_POST -d "{\"handle\":\"$handle\",\"name\":\"$handle\"}" "${BASE_URL}/window")
   _check_error "$response"
 }
 
@@ -458,43 +535,45 @@ switch_to_window() {
 #
 switch_to_frame() {
   local id=$1
+  local response
 
-  # is element
-  local frameId
-  frameId=$(get_attribute "$id" 'id')
-  if ! printf '%s\n' "$frameId" | grep "stale element reference" >/dev/null ; then
-    local response
-    response=$(_POST -d "{\"id\":\"$frameId\"}" "${BASE_URL}/frame")
+  # is integer
+  if [[ "$id" =~ ^[0-9]+$ ]]; then
+    response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
     _check_error "$response"
     return
   fi
 
-  local response
-  if expr "$id" : "[0-9]*$" >&/dev/null;then # is integer
-    response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
-  else # is id
-    response=$(_POST -d "{\"id\":\"$id\"}" "${BASE_URL}/frame")
+  # is element
+  response=$(_POST -d "{\"id\":$(_element_ref "$id")}" "${BASE_URL}/frame")
+  if _check_error "$response" 2>/dev/null; then
+    return 0
   fi
+
+  # is the id (or name) attribute of a frame
+  local frame
+  frame=$(find_element 'css selector' "[id=\"$id\"],[name=\"$id\"]") || return 1
+  response=$(_POST -d "{\"id\":$(_element_ref "$frame")}" "${BASE_URL}/frame")
   _check_error "$response"
 }
 
 switch_to_parent_frame() {
   local response
-  response=$(_POST "${BASE_URL}/frame/parent")
+  response=$(_POST -d '{}' "${BASE_URL}/frame/parent")
   _check_error "$response"
 }
 
 dismiss_alert() {
   local handle=$1
   local response
-  response=$(_POST "${BASE_URL}/alert/dismiss")
+  response=$(_POST -d '{}' "${BASE_URL}/alert/dismiss")
   _check_error "$response"
 }
 
 accept_alert() {
   local handle=$1
   local response
-  response=$(_POST "${BASE_URL}/alert/accept")
+  response=$(_POST -d '{}' "${BASE_URL}/alert/accept")
   _check_error "$response"
 }
 
@@ -511,15 +590,15 @@ set_window_rect() {
 }
 
 maximize_window() {
-  _POST "${BASE_URL}/window/maximize" | jq -r '.value'
+  _POST -d '{}' "${BASE_URL}/window/maximize" | jq -r '.value'
 }
 
 minimize_window() {
-  _POST "${BASE_URL}/window/minimize" | jq -r '.value'
+  _POST -d '{}' "${BASE_URL}/window/minimize" | jq -r '.value'
 }
 
 fullscreen_window() {
-  _POST "${BASE_URL}/window/fullscreen" | jq -r '.value'
+  _POST -d '{}' "${BASE_URL}/window/fullscreen" | jq -r '.value'
 }
 
 ##############################
@@ -543,21 +622,27 @@ release_actions() {
 # Move mouse to element
 mouse_move_to() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Double click on element
 double_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Right click (context menu) on element
 right_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
   perform_actions "$actions"
 }
 
@@ -570,7 +655,10 @@ hover() {
 drag_and_drop() {
   local source_id="$1"
   local target_id="$2"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${source_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pause\",\"duration\":200},{\"type\":\"pointerMove\",\"duration\":500,\"origin\":{\"ELEMENT\":\"${target_id}\"},\"x\":0,\"y\":0},{\"type\":\"pause\",\"duration\":100},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions origin_source origin_target
+  origin_source=$(_element_ref "$source_id")
+  origin_target=$(_element_ref "$target_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin_source},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pause\",\"duration\":200},{\"type\":\"pointerMove\",\"duration\":500,\"origin\":${origin_target},\"x\":0,\"y\":0},{\"type\":\"pause\",\"duration\":100},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 
