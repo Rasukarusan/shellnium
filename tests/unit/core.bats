@@ -578,3 +578,30 @@ teardown() {
 @test "KEY_F12 has correct W3C value (U+E03C)" {
   [[ "$KEY_F12" == "$(printf '\xee\x80\xbc')" ]]
 }
+
+# =====================
+# Wait helpers
+# =====================
+
+@test "_compare_lt compares decimal numbers" {
+  _compare_lt 0.4 1
+  _compare_lt 0.2 0.5
+  ! _compare_lt 1 1
+  ! _compare_lt 1.2 1
+}
+
+@test "_add adds decimal numbers" {
+  [ "$(_add 0 0.2)" = "0.2" ]
+  [ "$(_add 0.8 0.2)" = "1" ]
+  [ "$(_add 9.5 0.5)" = "10" ]
+}
+
+@test "wait_for_element times out with an interval below one second" {
+  find_element() { return 1; }
+  sleep() { echo "slept" >> "${BATS_TEST_TMPDIR}/sleeps.log"; }
+
+  run wait_for_element 'id' 'never' 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+  [ "$(wc -l < "${BATS_TEST_TMPDIR}/sleeps.log")" -eq 4 ]
+}
