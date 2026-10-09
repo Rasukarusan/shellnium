@@ -9,18 +9,33 @@ _shellnium_log() {
   fi
 }
 
-# Check WebDriver error response and surface error messages to stderr
+# Check WebDriver error response and surface error messages to stderr.
+# No response at all (the driver is not running, the session is gone) is an
+# error too.
 _check_error() {
   local response="$1"
   local error
-  error=$(printf '%s\n' "$response" | jq -r '.value.error // empty' 2>/dev/null)
+  if [ -z "$response" ]; then
+    echo "[shellnium] Error: no response from the driver" >&2
+    return 1
+  fi
+  error=$(printf '%s\n' "$response" | jq -r '.value.error? // empty' 2>/dev/null)
   if [ -n "$error" ]; then
     local message
-    message=$(printf '%s\n' "$response" | jq -r '.value.message // empty' 2>/dev/null)
+    message=$(printf '%s\n' "$response" | jq -r '.value.message? // empty' 2>/dev/null)
     echo "[shellnium] Error: $error - $message" >&2
     return 1
   fi
   return 0
+}
+
+# Print the value of a response, or fail if it is a WebDriver error.
+# usage: _value "$response" [jq filter]
+_value() {
+  local response="$1"
+  local filter="${2:-.value}"
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r "$filter"
 }
 
 ##############################
@@ -196,12 +211,16 @@ delete_session() {
 }
 
 get_all_cookies() {
-  _GET "${BASE_URL}/cookie" | jq -r '.value[]'
+  local response
+  response=$(_GET "${BASE_URL}/cookie")
+  _value "$response" '.value[]'
 }
 
 get_named_cookie() {
   local name=$1
-  _GET "${BASE_URL}/cookie/${name}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/cookie/${name}")
+  _value "$response"
 }
 
 add_cookie() {
@@ -238,11 +257,15 @@ navigate_to() {
 }
 
 get_current_url() {
-  _GET "${BASE_URL}/url" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/url")
+  _value "$response"
 }
 
 get_title() {
-  _GET "${BASE_URL}/title" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/title")
+  _value "$response"
 }
 
 back() {
@@ -267,7 +290,9 @@ refresh() {
 # Timeouts
 ##############################
 get_timeouts() {
-  _GET "${BASE_URL}/timeouts" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/timeouts")
+  _value "$response"
 }
 
 set_timeouts() {
@@ -370,11 +395,16 @@ find_elements_from_element() {
 }
 
 get_active_element() {
-  _GET "${BASE_URL}/element/active" | _element_id
+  local response
+  response=$(_GET "${BASE_URL}/element/active")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | _element_id
 }
 
 get_alert_text() {
-  _GET "${BASE_URL}/alert/text" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/alert/text")
+  _value "$response"
 }
 
 ##############################
@@ -413,7 +443,9 @@ get_attribute() {
   local payload
   payload=$(jq -n --arg script "$_GET_ATTRIBUTE_SCRIPT" --argjson element "$(_element_ref "$elementId")" --arg name "$name" \
     '{script: $script, args: [$element, $name]}')
-  _POST -d "$payload" "${BASE_URL}/execute/sync" | jq -r '.value'
+  local response
+  response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
+  _value "$response"
 }
 
 # The attribute exactly as written in the HTML, or null when it is absent.
@@ -421,43 +453,59 @@ get_attribute() {
 get_dom_attribute() {
   local elementId=$1
   local name=$2
-  _GET "${BASE_URL}/element/${elementId}/attribute/${name}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/attribute/${name}")
+  _value "$response"
 }
 
 get_property() {
   local elementId=$1
   local name=$2
-  _GET "${BASE_URL}/element/${elementId}/property/${name}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/property/${name}")
+  _value "$response"
 }
 
 get_css_value() {
   local elementId=$1
   local propertyName=$2
-  _GET "${BASE_URL}/element/${elementId}/css/${propertyName}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/css/${propertyName}")
+  _value "$response"
 }
 
 get_text() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/text" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/text")
+  _value "$response"
 }
 
 get_tag_name() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/name" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/name")
+  _value "$response"
 }
 
 get_rect() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/rect" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/rect")
+  _value "$response"
 }
 
 get_page_source() {
-  _GET "${BASE_URL}/source" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/source")
+  _value "$response"
 }
 
 is_element_enabled() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/enabled" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/enabled")
+  _value "$response"
 }
 
 ##############################
@@ -521,12 +569,18 @@ exec_script() {
 element_screenshot() {
   local elementId=$1
   local file=${2:-./screenshot.png}
-  _GET "${BASE_URL}/element/${elementId}/screenshot" | jq -r '.value' | base64 -d > "$file"
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/screenshot")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
 }
 
 screenshot() {
   local file=${1:-./screenshot.png}
-  _GET "${BASE_URL}/screenshot" | jq -r '.value' | base64 -d > "$file"
+  local response
+  response=$(_GET "${BASE_URL}/screenshot")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
 }
 
 
@@ -535,20 +589,28 @@ screenshot() {
 ##############################
 
 get_window_handle() {
-  _GET "${BASE_URL}/window" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/window")
+  _value "$response"
 }
 
 get_window_handles() {
-  _GET "${BASE_URL}/window/handles" | jq -r '.value[]'
+  local response
+  response=$(_GET "${BASE_URL}/window/handles")
+  _value "$response" '.value[]'
 }
 
 delete_window() {
-  curl -s -X DELETE "${BASE_URL}/window"
+  local response
+  response=$(_DELETE "${BASE_URL}/window")
+  _check_error "$response"
 }
 
 new_window() {
   local type=$1 # 'tab' or 'window'
-  _POST -d "{\"type\":\"$type\"}" "${BASE_URL}/window/new" | jq -r '.value.handle'
+  local response
+  response=$(_POST -d "{\"type\":\"$type\"}" "${BASE_URL}/window/new")
+  _value "$response" '.value.handle'
 }
 
 switch_to_window() {
@@ -609,7 +671,9 @@ accept_alert() {
 }
 
 get_window_rect() {
-  _GET "${BASE_URL}/window/rect" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/window/rect")
+  _value "$response"
 }
 
 set_window_rect() {
@@ -617,19 +681,27 @@ set_window_rect() {
   local y=$2
   local width=$3
   local height=$4
-  _POST -d "{\"x\": $x, \"y\": $y, \"width\": $width, \"height\": $height}" "${BASE_URL}/window/rect" | jq -r '.value'
+  local response
+  response=$(_POST -d "{\"x\": $x, \"y\": $y, \"width\": $width, \"height\": $height}" "${BASE_URL}/window/rect")
+  _value "$response"
 }
 
 maximize_window() {
-  _POST -d '{}' "${BASE_URL}/window/maximize" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/maximize")
+  _value "$response"
 }
 
 minimize_window() {
-  _POST -d '{}' "${BASE_URL}/window/minimize" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/minimize")
+  _value "$response"
 }
 
 fullscreen_window() {
-  _POST -d '{}' "${BASE_URL}/window/fullscreen" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/fullscreen")
+  _value "$response"
 }
 
 ##############################
@@ -640,12 +712,16 @@ fullscreen_window() {
 # https://www.w3.org/TR/webdriver/#perform-actions
 perform_actions() {
   local actions_json="$1"
-  _POST -d "$actions_json" "${BASE_URL}/actions" >/dev/null
+  local response
+  response=$(_POST -d "$actions_json" "${BASE_URL}/actions")
+  _check_error "$response"
 }
 
 # Release all actions
 release_actions() {
-  _DELETE "${BASE_URL}/actions" >/dev/null
+  local response
+  response=$(_DELETE "${BASE_URL}/actions")
+  _check_error "$response"
 }
 
 # ---- Mouse Actions (convenience wrappers) ----
@@ -731,7 +807,9 @@ send_key_combo() {
 
 is_element_displayed() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/displayed" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/displayed")
+  _value "$response"
 }
 
 ##############################
