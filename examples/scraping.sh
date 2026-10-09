@@ -62,7 +62,7 @@ HTMLEOF
 main() {
     local html_file
     html_file=$(_create_news_page)
-    trap "rm -f '$html_file'; cleanup_chromedriver" EXIT
+    trap "rm -f '$html_file'; cleanup_driver" EXIT
 
     local url="file://${html_file}"
     echo "Navigating to ${url} ..."

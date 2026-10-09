@@ -118,8 +118,17 @@ is_ready() {
   _GET "${ROOT}/status" | jq -r '.value.ready'
 }
 
-new_session() {
-  local chromeOptions binaryClause
+# JSON list of the given strings
+_json_array() {
+  if [ $# -eq 0 ]; then
+    echo '[]'
+  else
+    printf '%s\n' "$@" | jq -R . | jq -sc .
+  fi
+}
+
+# Capabilities for Chrome. Extra arguments are passed to the browser.
+_chrome_capabilities() {
   # Always include anti-automation-detection flags
   local allArgs=(
     "--disable-blink-features=AutomationControlled"
@@ -132,28 +141,50 @@ new_session() {
   if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
     allArgs+=("--headless=new")
   fi
-  chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
 
   # Point to downloaded chrome-headless-shell binary if set
-  binaryClause=""
-  if [ -n "${SHELLNIUM_CHROME_BIN:-}" ]; then
-    binaryClause=$(printf '"binary": "%s",' "$SHELLNIUM_CHROME_BIN")
-  fi
-
-  local response
-  response=$(_POST -d '{
-    "capabilities": {
-      "alwaysMatch": {
-        "browserName": "chrome",
-        "goog:chromeOptions": {
-          '"${binaryClause}"'
-          "args": ['"${chromeOptions}"'],
-          "excludeSwitches": ["enable-automation", "enable-logging"],
-          "useAutomationExtension": false
-        }
+  jq -n --argjson args "$(_json_array "${allArgs[@]}")" --arg binary "${SHELLNIUM_CHROME_BIN:-}" '{
+    capabilities: {
+      alwaysMatch: {
+        browserName: "chrome",
+        "goog:chromeOptions": ({
+          args: $args,
+          excludeSwitches: ["enable-automation", "enable-logging"],
+          useAutomationExtension: false
+        } + (if $binary == "" then {} else {binary: $binary} end))
       }
     }
-  }' "${ROOT}/session")
+  }'
+}
+
+# Capabilities for Firefox. Extra arguments are passed to the browser.
+_firefox_capabilities() {
+  # Firefox keeps the first value of a repeated argument, so the defaults go
+  # last and can be overridden.
+  local allArgs=("$@" "-width" "1920" "-height" "1080")
+
+  if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
+    allArgs+=("-headless")
+  fi
+
+  jq -n --argjson args "$(_json_array "${allArgs[@]}")" --arg binary "${SHELLNIUM_FIREFOX_BIN:-}" '{
+    capabilities: {
+      alwaysMatch: {
+        browserName: "firefox",
+        "moz:firefoxOptions": ({args: $args} + (if $binary == "" then {} else {binary: $binary} end))
+      }
+    }
+  }'
+}
+
+new_session() {
+  local capabilities response
+  case "${SHELLNIUM_BROWSER:-chrome}" in
+    firefox) capabilities=$(_firefox_capabilities "$@") ;;
+    *)       capabilities=$(_chrome_capabilities "$@") ;;
+  esac
+
+  response=$(_POST -d "$capabilities" "${ROOT}/session")
   _check_error "$response" || return 1
   printf '%s\n' "$response" | jq -r '.value.sessionId // .sessionId'
 }

@@ -84,7 +84,7 @@ OUTPUT_DIR="${SCRIPT_DIR}/../tmp/screenshots"
 main() {
     local pages_dir
     pages_dir=$(_create_screenshot_pages)
-    trap "rm -rf '$pages_dir'; cleanup_chromedriver" EXIT
+    trap "rm -rf '$pages_dir'; cleanup_driver" EXIT
 
     local PAGES=(
         "file://${pages_dir}/homepage.html"

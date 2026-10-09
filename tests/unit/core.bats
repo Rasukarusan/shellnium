@@ -861,3 +861,58 @@ _mock_curl() {
   run cat "$CURL_LOG"
   [[ "$output" == *'/element/elem-1/attribute/value'* ]]
 }
+
+# =====================
+# Browser selection
+# =====================
+
+@test "new_session asks for chrome by default" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  unset SHELLNIUM_BROWSER
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"browserName": "chrome"'* ]]
+  [[ "$output" != *'moz:firefoxOptions'* ]]
+}
+
+@test "new_session asks for firefox when SHELLNIUM_BROWSER=firefox" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  SHELLNIUM_BROWSER=firefox new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"browserName": "firefox"'* ]]
+  [[ "$output" == *'"moz:firefoxOptions"'* ]]
+  [[ "$output" != *'goog:chromeOptions'* ]]
+}
+
+@test "_firefox_capabilities adds -headless when SHELLNIUM_HEADLESS is enabled" {
+  SHELLNIUM_HEADLESS=true run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].args | index("-headless") != null')" = "true" ]
+
+  SHELLNIUM_HEADLESS="" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].args | index("-headless") != null')" = "false" ]
+}
+
+@test "_firefox_capabilities puts user arguments before the defaults" {
+  run _firefox_capabilities -width 800
+  [ "$(echo "$output" | jq -c '.capabilities.alwaysMatch["moz:firefoxOptions"].args[0:2]')" = '["-width","800"]' ]
+}
+
+@test "_firefox_capabilities includes binary only when SHELLNIUM_FIREFOX_BIN is set" {
+  SHELLNIUM_FIREFOX_BIN="/opt/firefox/firefox" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].binary')" = "/opt/firefox/firefox" ]
+
+  SHELLNIUM_FIREFOX_BIN="" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"] | has("binary")')" = "false" ]
+}
+
+@test "_chrome_capabilities keeps arguments with spaces and quotes intact" {
+  run _chrome_capabilities '--user-agent=My "quoted" agent'
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["goog:chromeOptions"].args[-1]')" = '--user-agent=My "quoted" agent' ]
+}
+
+@test "_json_array returns an empty list without arguments" {
+  run _json_array
+  [ "$output" = "[]" ]
+}
