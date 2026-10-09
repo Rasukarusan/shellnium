@@ -1014,3 +1014,41 @@ _mock_curl() {
   [ "$status" -eq 0 ]
   [ "$output" = "Example Domain" ]
 }
+
+# =====================
+# wait_for_url_contains / wait_for_title_contains
+# =====================
+
+@test "wait_for_url_contains succeeds once the URL contains the text" {
+  get_current_url() { echo "https://example.com/dashboard?tab=1"; }
+  sleep() { :; }
+
+  run wait_for_url_contains "/dashboard?tab" 1 0.25
+  [ "$status" -eq 0 ]
+}
+
+@test "wait_for_url_contains treats the text literally and times out" {
+  get_current_url() { echo "https://example.com/login"; }
+  sleep() { :; }
+
+  run wait_for_url_contains "log.n" 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+}
+
+@test "wait_for_title_contains succeeds once the title contains the text" {
+  get_title() { echo "My Dashboard - App"; }
+  sleep() { :; }
+
+  run wait_for_title_contains "Dashboard" 1 0.25
+  [ "$status" -eq 0 ]
+}
+
+@test "wait_for_title_contains times out when the title never matches" {
+  get_title() { echo "Login"; }
+  sleep() { :; }
+
+  run wait_for_title_contains "Dashboard" 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+}
