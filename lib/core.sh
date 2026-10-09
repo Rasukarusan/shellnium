@@ -2,11 +2,69 @@
 
 ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 
-# Debug logging - enable with SHELLNIUM_DEBUG=true
-_shellnium_log() {
+# Logging goes to stderr, so that stdout only carries results.
+# SHELLNIUM_LOG_LEVEL is one of debug, info, error (the default shows errors
+# and info) or none. SHELLNIUM_DEBUG=true is the same as debug.
+_log_enabled() {
+  local level="${SHELLNIUM_LOG_LEVEL:-info}"
   if [ "${SHELLNIUM_DEBUG:-}" = "true" ]; then
+    level="debug"
+  fi
+  case "$1" in
+    debug) [ "$level" = "debug" ] ;;
+    info)  [ "$level" = "debug" ] || [ "$level" = "info" ] ;;
+    error) [ "$level" != "none" ] ;;
+  esac
+}
+
+# Debug logging - enable with SHELLNIUM_DEBUG=true or SHELLNIUM_LOG_LEVEL=debug
+_shellnium_log() {
+  if _log_enabled debug; then
     echo "[shellnium] $*" >&2
   fi
+}
+
+_shellnium_error() {
+  if _log_enabled error; then
+    echo "[shellnium] $*" >&2
+  fi
+}
+
+# With SHELLNIUM_OUTPUT=json every function prints one JSON object:
+# {"ok":true,"value":...} on success (value is omitted when there is nothing
+# to return) and {"ok":false,"error":"...","message":"..."} on failure. The
+# exit code is the same as in the default plain output.
+_json_mode() {
+  [ "${SHELLNIUM_OUTPUT:-}" = "json" ]
+}
+
+# Run a function with plain output, whatever SHELLNIUM_OUTPUT says. For the
+# functions that build on other functions.
+_plain() {
+  SHELLNIUM_OUTPUT='' "$@"
+}
+
+# Report success, with no value or with the given string as value.
+_ok() {
+  if _json_mode; then
+    if [ $# -eq 0 ]; then
+      echo '{"ok":true}'
+    else
+      jq -cn --arg value "$1" '{ok: true, value: $value}'
+    fi
+  elif [ $# -gt 0 ]; then
+    printf '%s\n' "$1"
+  fi
+}
+
+# Report a failure and return 1.
+# usage: _fail "<error>" "<message>"
+_fail() {
+  _shellnium_error "$2"
+  if _json_mode; then
+    jq -cn --arg error "$1" --arg message "$2" '{ok: false, error: $error, message: $message}'
+  fi
+  return 1
 }
 
 # Check WebDriver error response and surface error messages to stderr.
@@ -16,17 +74,26 @@ _check_error() {
   local response="$1"
   local error
   if [ -z "$response" ]; then
-    echo "[shellnium] Error: no response from the driver" >&2
+    _fail "no response" "Error: no response from the driver"
     return 1
   fi
   error=$(printf '%s\n' "$response" | jq -r '.value.error? // empty' 2>/dev/null)
   if [ -n "$error" ]; then
     local message
     message=$(printf '%s\n' "$response" | jq -r '.value.message? // empty' 2>/dev/null)
-    echo "[shellnium] Error: $error - $message" >&2
+    _shellnium_error "Error: $error - $message"
+    if _json_mode; then
+      jq -cn --arg error "$error" --arg message "$message" '{ok: false, error: $error, message: $message}'
+    fi
     return 1
   fi
   return 0
+}
+
+# Check the response of a command that returns nothing.
+_done() {
+  _check_error "$1" || return 1
+  _ok
 }
 
 # Print the value of a response, or fail if it is a WebDriver error.
@@ -35,7 +102,23 @@ _value() {
   local response="$1"
   local filter="${2:-.value}"
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r "$filter"
+  if _json_mode; then
+    printf '%s\n' "$response" | jq -c "{ok: true, value: (${filter})}"
+  else
+    printf '%s\n' "$response" | jq -r "$filter"
+  fi
+}
+
+# Same for a response whose value is a list: one item per line, or the list
+# itself in JSON mode.
+_values() {
+  local response="$1"
+  _check_error "$response" || return 1
+  if _json_mode; then
+    printf '%s\n' "$response" | jq -c '{ok: true, value: .value}'
+  else
+    printf '%s\n' "$response" | jq -r '.value[]'
+  fi
 }
 
 ##############################
@@ -120,6 +203,23 @@ _element_ids() {
   jq -r --arg key "$W3C_ELEMENT_KEY" '.value[] | (.[$key] // .ELEMENT)'
 }
 
+# Print the element(s) of a find-element response.
+_emit_element() {
+  if _json_mode; then
+    printf '%s\n' "$1" | _element_id | jq -R '{ok: true, value: .}' | jq -c .
+  else
+    printf '%s\n' "$1" | _element_id
+  fi
+}
+
+_emit_elements() {
+  if _json_mode; then
+    printf '%s\n' "$1" | jq -c --arg key "$W3C_ELEMENT_KEY" '{ok: true, value: [.value[] | (.[$key] // .ELEMENT)]}'
+  else
+    printf '%s\n' "$1" | _element_ids
+  fi
+}
+
 # Build the JSON reference to an element, as expected in request payloads.
 _element_ref() {
   jq -cn --arg key "$W3C_ELEMENT_KEY" --arg id "$1" '{($key): $id, ELEMENT: $id}'
@@ -200,20 +300,19 @@ new_session() {
   esac
 
   response=$(_POST -d "$capabilities" "${ROOT}/session")
-  _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -r '.value.sessionId // .sessionId'
+  _value "$response" '.value.sessionId // .sessionId'
 }
 
 delete_session() {
   local response
   response=$(_DELETE "${BASE_URL}")
-  _check_error "$response"
+  _done "$response"
 }
 
 get_all_cookies() {
   local response
   response=$(_GET "${BASE_URL}/cookie")
-  _value "$response" '.value[]'
+  _values "$response"
 }
 
 get_named_cookie() {
@@ -228,20 +327,20 @@ add_cookie() {
   local value="{\"cookie\": ${cookie}}"
   local response
   response=$(_POST -d "$value" "${BASE_URL}/cookie")
-  _check_error "$response"
+  _done "$response"
 }
 
 delete_cookie() {
   local name=$1
   local response
   response=$(_DELETE "${BASE_URL}/cookie/${name}")
-  _check_error "$response"
+  _done "$response"
 }
 
 delete_all_cookies() {
   local response
   response=$(_DELETE "${BASE_URL}/cookie")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -253,7 +352,7 @@ navigate_to() {
   local payload response
   payload=$(jq -n --arg url "$url" '{url: $url}')
   response=$(_POST -d "$payload" "${BASE_URL}/url")
-  _check_error "$response"
+  _done "$response"
 }
 
 get_current_url() {
@@ -271,19 +370,19 @@ get_title() {
 back() {
   local response
   response=$(_POST -d '{}' "${BASE_URL}/back")
-  _check_error "$response"
+  _done "$response"
 }
 
 forward() {
   local response
   response=$(_POST -d '{}' "${BASE_URL}/forward")
-  _check_error "$response"
+  _done "$response"
 }
 
 refresh() {
   local response
   response=$(_POST -d '{}' "${BASE_URL}/refresh")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -301,28 +400,28 @@ set_timeouts() {
   local implicit=$3
   local response
   response=$(_POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_script() {
   local script=$1
   local response
   response=$(_POST -d "{\"script\": $script}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_pageLoad() {
   local pageLoad=$1
   local response
   response=$(_POST -d "{\"pageLoad\": $pageLoad}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_implicit() {
   local implicit=$1
   local response
   response=$(_POST -d "{\"implicit\": $implicit}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -359,7 +458,7 @@ find_element() {
   payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | _element_id
+  _emit_element "$response"
 }
 
 find_elements() {
@@ -369,7 +468,7 @@ find_elements() {
   payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/elements")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | _element_ids
+  _emit_elements "$response"
 }
 
 find_element_from_element() {
@@ -380,7 +479,7 @@ find_element_from_element() {
   payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/element")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | _element_id
+  _emit_element "$response"
 }
 
 find_elements_from_element() {
@@ -391,14 +490,14 @@ find_elements_from_element() {
   payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/elements")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | _element_ids
+  _emit_elements "$response"
 }
 
 get_active_element() {
   local response
   response=$(_GET "${BASE_URL}/element/active")
   _check_error "$response" || return 1
-  printf '%s\n' "$response" | _element_id
+  _emit_element "$response"
 }
 
 get_alert_text() {
@@ -518,7 +617,7 @@ send_keys() {
   local payload response
   payload=$(jq -n --arg value "$value" '{text: $value, value: [$value]}')
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/value")
-  _check_error "$response"
+  _done "$response"
 }
 
 send_alert_text() {
@@ -526,21 +625,21 @@ send_alert_text() {
   local payload response
   payload=$(jq -n --arg value "$value" '{text: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/alert/text")
-  _check_error "$response"
+  _done "$response"
 }
 
 click() {
   local elementId=$1
   local response
   response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/click")
-  _check_error "$response"
+  _done "$response"
 }
 
 element_clear() {
   local elementId=$1
   local response
   response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/clear")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -548,7 +647,14 @@ element_clear() {
 ##############################
 
 get_source() {
-	_GET "${BASE_URL}/source"
+  local response
+  response=$(_GET "${BASE_URL}/source")
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response"
+  fi
 }
 
 exec_script() {
@@ -562,8 +668,12 @@ exec_script() {
   payload=$(printf '{"script": %s, "args": %s}' "$script" "$args")
   local response
   response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
-  _check_error "$response" || return 1
-  printf '%s\n' "$response"
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response"
+  fi
 }
 
 element_screenshot() {
@@ -573,6 +683,7 @@ element_screenshot() {
   response=$(_GET "${BASE_URL}/element/${elementId}/screenshot")
   _check_error "$response" || return 1
   printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
+  _ok
 }
 
 screenshot() {
@@ -581,6 +692,7 @@ screenshot() {
   response=$(_GET "${BASE_URL}/screenshot")
   _check_error "$response" || return 1
   printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
+  _ok
 }
 
 
@@ -597,13 +709,13 @@ get_window_handle() {
 get_window_handles() {
   local response
   response=$(_GET "${BASE_URL}/window/handles")
-  _value "$response" '.value[]'
+  _values "$response"
 }
 
 delete_window() {
   local response
   response=$(_DELETE "${BASE_URL}/window")
-  _check_error "$response"
+  _done "$response"
 }
 
 new_window() {
@@ -617,7 +729,7 @@ switch_to_window() {
   local handle=$1
   local response
   response=$(_POST -d "{\"handle\":\"$handle\",\"name\":\"$handle\"}" "${BASE_URL}/window")
-  _check_error "$response"
+  _done "$response"
 }
 
 #
@@ -633,41 +745,45 @@ switch_to_frame() {
   # is integer
   if [[ "$id" =~ ^[0-9]+$ ]]; then
     response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
-    _check_error "$response"
+    _done "$response"
     return
   fi
 
   # is element
   response=$(_POST -d "{\"id\":$(_element_ref "$id")}" "${BASE_URL}/frame")
-  if _check_error "$response" 2>/dev/null; then
+  if _plain _check_error "$response" 2>/dev/null; then
+    _ok
     return 0
   fi
 
   # is the id (or name) attribute of a frame
   local frame
-  frame=$(find_element 'css selector' "[id=\"$id\"],[name=\"$id\"]") || return 1
+  frame=$(_plain find_element 'css selector' "[id=\"$id\"],[name=\"$id\"]") || {
+    _fail "no such frame" "Error: no such frame - $id"
+    return 1
+  }
   response=$(_POST -d "{\"id\":$(_element_ref "$frame")}" "${BASE_URL}/frame")
-  _check_error "$response"
+  _done "$response"
 }
 
 switch_to_parent_frame() {
   local response
   response=$(_POST -d '{}' "${BASE_URL}/frame/parent")
-  _check_error "$response"
+  _done "$response"
 }
 
 dismiss_alert() {
   local handle=$1
   local response
   response=$(_POST -d '{}' "${BASE_URL}/alert/dismiss")
-  _check_error "$response"
+  _done "$response"
 }
 
 accept_alert() {
   local handle=$1
   local response
   response=$(_POST -d '{}' "${BASE_URL}/alert/accept")
-  _check_error "$response"
+  _done "$response"
 }
 
 get_window_rect() {
@@ -714,14 +830,14 @@ perform_actions() {
   local actions_json="$1"
   local response
   response=$(_POST -d "$actions_json" "${BASE_URL}/actions")
-  _check_error "$response"
+  _done "$response"
 }
 
 # Release all actions
 release_actions() {
   local response
   response=$(_DELETE "${BASE_URL}/actions")
-  _check_error "$response"
+  _done "$response"
 }
 
 # ---- Mouse Actions (convenience wrappers) ----
@@ -837,17 +953,16 @@ wait_for_element() {
   local element=""
 
   while _compare_lt "$elapsed" "$timeout"; do
-    element=$(find_element "$property" "$value" 2>/dev/null)
+    element=$(_plain find_element "$property" "$value" 2>/dev/null)
     if [ -n "$element" ] && [ "$element" != "null" ]; then
-      printf '%s\n' "$element"
+      _ok "$element"
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: element not found ($property: $value) after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: element not found ($property: $value) after ${timeout}s"
 }
 
 # Wait until an element is displayed and enabled (clickable)
@@ -861,14 +976,14 @@ wait_for_clickable() {
   local element=""
 
   while _compare_lt "$elapsed" "$timeout"; do
-    element=$(find_element "$property" "$value" 2>/dev/null)
+    element=$(_plain find_element "$property" "$value" 2>/dev/null)
     if [ -n "$element" ] && [ "$element" != "null" ]; then
       local displayed
       local enabled
-      displayed=$(is_element_displayed "$element" 2>/dev/null)
-      enabled=$(is_element_enabled "$element" 2>/dev/null)
+      displayed=$(_plain is_element_displayed "$element" 2>/dev/null)
+      enabled=$(_plain is_element_enabled "$element" 2>/dev/null)
       if [ "$displayed" = "true" ] && [ "$enabled" = "true" ]; then
-        printf '%s\n' "$element"
+        _ok "$element"
         return 0
       fi
     fi
@@ -876,8 +991,7 @@ wait_for_clickable() {
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: element not clickable ($property: $value) after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: element not clickable ($property: $value) after ${timeout}s"
 }
 
 # Wait until specific text appears in the page source
@@ -890,16 +1004,16 @@ wait_for_text() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local source
-    source=$(get_page_source 2>/dev/null)
+    source=$(_plain get_page_source 2>/dev/null)
     if printf '%s\n' "$source" | grep -q "$text"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: text not found ('$text') after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: text not found ('$text') after ${timeout}s"
 }
 
 # Wait until the current URL matches a pattern (grep regex)
@@ -912,16 +1026,16 @@ wait_for_url() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local url
-    url=$(get_current_url 2>/dev/null)
+    url=$(_plain get_current_url 2>/dev/null)
     if printf '%s\n' "$url" | grep -q "$pattern"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: URL did not match ('$pattern') after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: URL did not match ('$pattern') after ${timeout}s"
 }
 
 # Wait until the current URL contains a string
@@ -934,16 +1048,16 @@ wait_for_url_contains() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local url
-    url=$(get_current_url 2>/dev/null)
+    url=$(_plain get_current_url 2>/dev/null)
     if printf '%s\n' "$url" | grep -qF -- "$text"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: URL did not contain '$text' after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: URL did not contain '$text' after ${timeout}s"
 }
 
 # Wait until the page title contains a string
@@ -956,16 +1070,16 @@ wait_for_title_contains() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local title
-    title=$(get_title 2>/dev/null)
+    title=$(_plain get_title 2>/dev/null)
     if printf '%s\n' "$title" | grep -qF -- "$text"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: title did not contain '$text' after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: title did not contain '$text' after ${timeout}s"
 }
 
 # Retry a command up to N times
@@ -999,86 +1113,85 @@ retry() {
 # 0 when the check holds; otherwise they explain the difference on stderr and
 # return 1.
 
-_assert_fail() {
-  echo "[shellnium] Assertion failed: $1" >&2
-  return 1
+# usage: _assert_equals "<what>" "<actual>" "<expected>"
+_assert_equals() {
+  if [ "$2" = "$3" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: $1 is '$2', expected '$3'"
+  fi
+}
+
+# usage: _assert_contains "<what>" "<actual>" "<expected part>"
+_assert_contains() {
+  case "$2" in
+    *"$3"*) _ok ;;
+    *) _fail "assertion failed" "Assertion failed: $1 is '$2', expected it to contain '$3'" ;;
+  esac
 }
 
 # usage: assert_url "https://example.com/dashboard"
 assert_url() {
-  local expected="$1"
   local actual
-  actual=$(get_current_url) || return 1
-  [ "$actual" = "$expected" ] || _assert_fail "URL is '$actual', expected '$expected'"
+  actual=$(_plain get_current_url) || { _fail "assertion failed" "Assertion failed: could not read the URL"; return 1; }
+  _assert_equals "URL" "$actual" "$1"
 }
 
 # usage: assert_url_contains "/dashboard"
 assert_url_contains() {
-  local expected="$1"
   local actual
-  actual=$(get_current_url) || return 1
-  case "$actual" in
-    *"$expected"*) return 0 ;;
-  esac
-  _assert_fail "URL is '$actual', expected it to contain '$expected'"
+  actual=$(_plain get_current_url) || { _fail "assertion failed" "Assertion failed: could not read the URL"; return 1; }
+  _assert_contains "URL" "$actual" "$1"
 }
 
 # usage: assert_title "Dashboard"
 assert_title() {
-  local expected="$1"
   local actual
-  actual=$(get_title) || return 1
-  [ "$actual" = "$expected" ] || _assert_fail "title is '$actual', expected '$expected'"
+  actual=$(_plain get_title) || { _fail "assertion failed" "Assertion failed: could not read the title"; return 1; }
+  _assert_equals "title" "$actual" "$1"
 }
 
 # usage: assert_title_contains "Dash"
 assert_title_contains() {
-  local expected="$1"
   local actual
-  actual=$(get_title) || return 1
-  case "$actual" in
-    *"$expected"*) return 0 ;;
-  esac
-  _assert_fail "title is '$actual', expected it to contain '$expected'"
+  actual=$(_plain get_title) || { _fail "assertion failed" "Assertion failed: could not read the title"; return 1; }
+  _assert_contains "title" "$actual" "$1"
 }
 
 # usage: assert_element_text "$element" "Success"
 assert_element_text() {
-  local elementId="$1"
-  local expected="$2"
   local actual
-  actual=$(get_text "$elementId") || return 1
-  [ "$actual" = "$expected" ] || _assert_fail "element text is '$actual', expected '$expected'"
+  actual=$(_plain get_text "$1") || { _fail "assertion failed" "Assertion failed: could not read the element text"; return 1; }
+  _assert_equals "element text" "$actual" "$2"
 }
 
 # usage: assert_element_text_contains "$element" "Succ"
 assert_element_text_contains() {
-  local elementId="$1"
-  local expected="$2"
   local actual
-  actual=$(get_text "$elementId") || return 1
-  case "$actual" in
-    *"$expected"*) return 0 ;;
-  esac
-  _assert_fail "element text is '$actual', expected it to contain '$expected'"
+  actual=$(_plain get_text "$1") || { _fail "assertion failed" "Assertion failed: could not read the element text"; return 1; }
+  _assert_contains "element text" "$actual" "$2"
 }
 
 # usage: assert_element_exists 'css selector' '.success'
 assert_element_exists() {
-  local property="$1"
-  local value="$2"
   local elements
-  elements=$(find_elements "$property" "$value" 2>/dev/null)
-  [ -n "$elements" ] || _assert_fail "no element matches ($property: $value)"
+  elements=$(_plain find_elements "$1" "$2" 2>/dev/null)
+  if [ -n "$elements" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: no element matches ($1: $2)"
+  fi
 }
 
 # usage: assert_element_not_exists 'css selector' '.error'
 assert_element_not_exists() {
-  local property="$1"
-  local value="$2"
   local elements
-  elements=$(find_elements "$property" "$value" 2>/dev/null)
-  [ -z "$elements" ] || _assert_fail "an element matches ($property: $value)"
+  elements=$(_plain find_elements "$1" "$2" 2>/dev/null)
+  if [ -z "$elements" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: an element matches ($1: $2)"
+  fi
 }
 
 ##############################
@@ -1125,8 +1238,12 @@ _exec_json() {
   local payload response
   payload=$(jq -n --arg script "$1" --argjson args "${2:-[]}" '{script: $script, args: $args}')
   response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
-  _check_error "$response" || return 1
-  printf '%s\n' "$response" | jq -c '.value'
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response" | jq -c '.value'
+  fi
 }
 
 # Visible elements a user could click: links, buttons and the like.

@@ -163,6 +163,8 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 | `SHELLNIUM_FIREFOX_BIN` | *(unset)* | Path to the Firefox binary, when it is not found automatically |
 | `SHELLNIUM_GECKODRIVER_VERSION` | *(latest)* | GeckoDriver version to download (e.g. `0.36.0`) |
 | `SHELLNIUM_DEBUG` | *(unset)* | Set to `true` to enable verbose debug logging |
+| `SHELLNIUM_LOG_LEVEL` | `info` | What is written to stderr: `debug`, `info`, `error` or `none` |
+| `SHELLNIUM_OUTPUT` | *(unset)* | Set to `json` to get every result as a JSON object |
 
 #### Debug Mode
 
@@ -173,6 +175,26 @@ SHELLNIUM_DEBUG=true bash demo.sh
 ```
 
 Debug output is written to stderr so it won't interfere with your script's normal output. WebDriver errors (e.g., element not found, stale element reference) are always surfaced to stderr regardless of debug mode.
+
+#### Exit Codes and JSON Output
+
+Every function returns a non-zero exit code when the browser reports an error (element not found, session gone, script failed...), prints the error on stderr and nothing on stdout, so `$?`, `||` and `set -e` work as expected:
+
+```bash
+element=$(find_element 'id' 'submit') || echo "there is no submit button"
+```
+
+With `SHELLNIUM_OUTPUT=json` each function prints a single JSON object instead, which is easier to parse from other programs and AI agents. Exit codes stay the same.
+
+```bash
+export SHELLNIUM_OUTPUT=json
+get_title                          # {"ok":true,"value":"Example Domain"}
+click "$element"                   # {"ok":true}
+find_elements 'css selector' 'li'  # {"ok":true,"value":["id-1","id-2"]}
+find_element 'id' 'missing'        # {"ok":false,"error":"no such element","message":"..."}
+```
+
+Results always go to stdout and messages to stderr. `SHELLNIUM_LOG_LEVEL` chooses how much is written there: `debug` (every request and response), `info` (the default: errors and download progress), `error` or `none`.
 
 ### Firefox
 
@@ -318,7 +340,37 @@ send_keys $element "${KEY_TAB}"           # Press Tab
 - `wait_for_clickable` — Wait until an element is displayed and enabled
 - `wait_for_text` — Wait until specific text appears in the page source
 - `wait_for_url` — Wait until the current URL matches a pattern
+- `wait_for_url_contains` — Wait until the current URL contains a string
+- `wait_for_title_contains` — Wait until the page title contains a string
 - `retry` — Retry any command up to N times with interval
+
+### Assertions
+
+Check that an action had the intended effect. They print nothing and return 0 when the check holds; otherwise they explain the difference on stderr and return 1.
+
+- `assert_url` / `assert_url_contains`
+- `assert_title` / `assert_title_contains`
+- `assert_element_text` / `assert_element_text_contains`
+- `assert_element_exists` / `assert_element_not_exists`
+
+```bash
+click "$submit"
+assert_url_contains '/dashboard' || exit 1
+```
+
+### Page Introspection
+
+Find out what is on a page without knowing its selectors beforehand. Every function prints JSON, and each element comes with a `selector` that `find_element 'css selector'` accepts.
+
+- `get_page_summary [max_text_chars] [max_links]` — title, URL, headings, the beginning of the text and the links
+- `get_clickable_elements [max_elements]` — visible links, buttons and other clickable elements
+- `get_form_fields` — form fields with their name, type, label, placeholder and options (password values are never included)
+- `get_element_info "$element"` — tag, text, attributes, state and position of one element
+
+```bash
+get_clickable_elements | jq -r '.[] | "\(.text)\t\(.selector)"'
+login=$(find_element 'css selector' "$(get_clickable_elements | jq -r '.[] | select(.text == "Log in") | .selector')")
+```
 
 ### Alerts
 

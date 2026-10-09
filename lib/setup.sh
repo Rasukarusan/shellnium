@@ -5,6 +5,25 @@
 # Firefox (SHELLNIUM_BROWSER=firefox).
 # Downloaded binaries are cached in ~/.cache/shellnium/<driver>-<version>/
 
+# Progress messages go to stderr, unless SHELLNIUM_LOG_LEVEL is error or none.
+_setup_info() {
+  case "${SHELLNIUM_LOG_LEVEL:-info}" in
+    error|none) ;;
+    *)
+      # shellcheck disable=SC2059
+      printf "$@" >&2
+      ;;
+  esac
+}
+
+# curl flag for downloads: a progress bar, or nothing when messages are off.
+_setup_progress() {
+  case "${SHELLNIUM_LOG_LEVEL:-info}" in
+    error|none) echo "-s" ;;
+    *)          echo "--progress-bar" ;;
+  esac
+}
+
 SHELLNIUM_CACHE_DIR="${SHELLNIUM_CACHE_DIR:-${HOME}/.cache/shellnium}"
 SHELLNIUM_BROWSER="${SHELLNIUM_BROWSER:-chrome}"
 # Each driver keeps its usual port, so that a driver left running for one
@@ -107,10 +126,10 @@ _download_chrome_headless_shell() {
 
   download_url="https://storage.googleapis.com/chrome-for-testing-public/${version}/${platform}/chrome-headless-shell-${platform}.zip"
 
-  printf "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform" >&2
+  _setup_info "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform"
 
   zip_file="${cache_dir}/chrome-headless-shell.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" >&2; then
+  if ! curl -fL "$(_setup_progress)" -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download chrome-headless-shell from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -146,7 +165,7 @@ _download_chrome_headless_shell() {
   fi
 
   SHELLNIUM_CHROME_BIN="${cache_dir}/chrome-headless-shell"
-  printf "chrome-headless-shell %s ready.\n" "$version" >&2
+  _setup_info "chrome-headless-shell %s ready.\n" "$version"
   echo "$version"
 }
 
@@ -178,7 +197,7 @@ _download_chromedriver() {
 
   mkdir -p "$cache_dir"
 
-  printf "Downloading ChromeDriver for Chrome %s ...\n" "$chrome_version" >&2
+  _setup_info "Downloading ChromeDriver for Chrome %s ...\n" "$chrome_version"
 
   if [ "$major" -ge 115 ]; then
     # Chrome for Testing API (Chrome 115+)
@@ -212,7 +231,7 @@ _download_chromedriver() {
   fi
 
   zip_file="${cache_dir}/chromedriver.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" >&2; then
+  if ! curl -fL "$(_setup_progress)" -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download ChromeDriver from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -243,7 +262,7 @@ _download_chromedriver() {
     return 1
   fi
 
-  printf "ChromeDriver %s ready.\n" "${driver_version:-$chrome_version}" >&2
+  _setup_info "ChromeDriver %s ready.\n" "${driver_version:-$chrome_version}"
   echo "${cache_dir}/chromedriver"
 }
 
@@ -273,7 +292,7 @@ setup_chromedriver() {
 
   if [ -z "$chrome_version" ]; then
     # No system Chrome found — auto-download chrome-headless-shell
-    printf "No system Chrome found. Auto-downloading chrome-headless-shell ...\n" >&2
+    _setup_info "No system Chrome found. Auto-downloading chrome-headless-shell ...\n"
     # NOTE: $() runs in a subshell, so SHELLNIUM_CHROME_BIN set inside
     # _download_chrome_headless_shell does not propagate. Reconstruct it here.
     chrome_version=$(_download_chrome_headless_shell) || return 1
@@ -400,10 +419,10 @@ _download_geckodriver() {
 
   download_url="https://github.com/mozilla/geckodriver/releases/download/${version}/geckodriver-${version}-${platform}.tar.gz"
 
-  printf "Downloading GeckoDriver %s (%s) ...\n" "$version" "$platform" >&2
+  _setup_info "Downloading GeckoDriver %s (%s) ...\n" "$version" "$platform"
 
   archive="${cache_dir}/geckodriver.tar.gz"
-  if ! curl -fL --progress-bar -o "$archive" "$download_url" >&2; then
+  if ! curl -fL "$(_setup_progress)" -o "$archive" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download GeckoDriver from %s\e[m\n" "$download_url" >&2
     rm -f "$archive"
     return 1
@@ -423,7 +442,7 @@ _download_geckodriver() {
     return 1
   fi
 
-  printf "GeckoDriver %s ready.\n" "$version" >&2
+  _setup_info "GeckoDriver %s ready.\n" "$version"
   echo "${cache_dir}/geckodriver"
 }
 

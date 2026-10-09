@@ -1153,7 +1153,6 @@ _mock_curl() {
   _mock_curl '{"value": []}'
 
   get_clickable_elements 25
-  run jq -sr '.[] | .args[0]?' <(grep -A200 '"script"' "$CURL_LOG" | sed -n '/^{/,/^}/p')
   run cat "$CURL_LOG"
   [[ "$output" == *"25"* ]]
   [[ "$output" == *'querySelectorAll'* ]]
@@ -1175,4 +1174,162 @@ _mock_curl() {
   [ "$output" = '{"title":"T","links":[]}' ]
   run get_form_fields
   [ "$status" -eq 0 ]
+}
+
+# =====================
+# JSON output (SHELLNIUM_OUTPUT=json)
+# =====================
+
+@test "json: a getter wraps its value" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_OUTPUT=json run get_title
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true,"value":"Example Domain"}' ]
+}
+
+@test "json: a value that is an object stays an object" {
+  _mock_curl '{"value": {"x": 1, "y": 2, "width": 3, "height": 4}}'
+
+  SHELLNIUM_OUTPUT=json run get_rect 'elem-1'
+  [ "$(echo "$output" | jq -r '.value.width')" = "3" ]
+}
+
+@test "json: an action reports ok without a value" {
+  _mock_curl '{"value": null}'
+
+  SHELLNIUM_OUTPUT=json run click 'elem-1'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true}' ]
+}
+
+@test "json: a WebDriver error is reported as an object and exit code 1" {
+  _mock_curl '{"value": {"error": "no such element", "message": "Unable to locate element"}}'
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [ "$output" = '{"ok":false,"error":"no such element","message":"Unable to locate element"}' ]
+}
+
+@test "json: find_element returns the element id as value" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "elem-1"}}'
+
+  SHELLNIUM_OUTPUT=json run find_element 'css selector' 'h1'
+  [ "$output" = '{"ok":true,"value":"elem-1"}' ]
+}
+
+@test "json: find_elements returns a list, empty when nothing matches" {
+  _mock_curl '{"value": [{"element-6066-11e4-a52e-4f735466cecf": "a"}, {"ELEMENT": "b"}]}'
+  SHELLNIUM_OUTPUT=json run find_elements 'css selector' 'li'
+  [ "$output" = '{"ok":true,"value":["a","b"]}' ]
+
+  _mock_curl '{"value": []}'
+  SHELLNIUM_OUTPUT=json run find_elements 'css selector' 'li'
+  [ "$output" = '{"ok":true,"value":[]}' ]
+}
+
+@test "json: list getters return a list" {
+  _mock_curl '{"value": ["w1", "w2"]}'
+
+  SHELLNIUM_OUTPUT=json run get_window_handles
+  [ "$output" = '{"ok":true,"value":["w1","w2"]}' ]
+}
+
+@test "json: exec_script returns the script result as value" {
+  _mock_curl '{"value": 7}'
+
+  SHELLNIUM_OUTPUT=json run exec_script 'return 3 + 4'
+  [ "$output" = '{"ok":true,"value":7}' ]
+}
+
+@test "json: no response from the driver is an error object" {
+  curl() { return 7; }
+  export -f curl
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run get_title
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.ok')" = "false" ]
+  [ "$(echo "$output" | jq -r '.error')" = "no response" ]
+}
+
+@test "json: wait_for_element returns the element or a timeout error" {
+  sleep() { :; }
+  find_element() { echo "elem-1"; }
+  SHELLNIUM_OUTPUT=json run wait_for_element 'id' 'x' 1 0.25
+  [ "$output" = '{"ok":true,"value":"elem-1"}' ]
+
+  find_element() { return 1; }
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run wait_for_element 'id' 'x' 1 0.25
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.error')" = "timeout" ]
+}
+
+@test "json: waits read other functions in plain mode" {
+  sleep() { :; }
+  _mock_curl '{"value": "https://example.com/dashboard"}'
+
+  SHELLNIUM_OUTPUT=json run wait_for_url_contains '/dashboard' 1 0.25
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true}' ]
+}
+
+@test "json: assertions report ok or an assertion error" {
+  _mock_curl '{"value": "Dashboard"}'
+
+  SHELLNIUM_OUTPUT=json run assert_title "Dashboard"
+  [ "$output" = '{"ok":true}' ]
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run assert_title "Login"
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.error')" = "assertion failed" ]
+  [[ "$(echo "$output" | jq -r '.message')" == *"title is 'Dashboard', expected 'Login'"* ]]
+}
+
+@test "json: introspection results are wrapped too" {
+  _mock_curl '{"value": [{"tag": "a"}]}'
+
+  SHELLNIUM_OUTPUT=json run get_clickable_elements
+  [ "$output" = '{"ok":true,"value":[{"tag":"a"}]}' ]
+}
+
+@test "plain output is unchanged when SHELLNIUM_OUTPUT is not json" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_OUTPUT=text run get_title
+  [ "$output" = "Example Domain" ]
+  SHELLNIUM_OUTPUT=text run click 'elem-1'
+  [ -z "$output" ]
+}
+
+# =====================
+# Log levels
+# =====================
+
+@test "errors go to stderr by default" {
+  _mock_curl '{"value": {"error": "no such element", "message": "nope"}}'
+
+  local out err
+  out=$(find_element 'css selector' '.missing' 2>/dev/null) || true
+  err=$(find_element 'css selector' '.missing' 2>&1 >/dev/null) || true
+  [ -z "$out" ]
+  [ "$err" = "[shellnium] Error: no such element - nope" ]
+}
+
+@test "SHELLNIUM_LOG_LEVEL=none silences errors" {
+  _mock_curl '{"value": {"error": "no such element", "message": "nope"}}'
+
+  SHELLNIUM_LOG_LEVEL=none run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+@test "SHELLNIUM_LOG_LEVEL=debug logs requests like SHELLNIUM_DEBUG=true" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_LOG_LEVEL=debug run get_title
+  [[ "$output" == *"[shellnium] GET "* ]]
+  SHELLNIUM_DEBUG=true run get_title
+  [[ "$output" == *"[shellnium] GET "* ]]
+  run get_title
+  [[ "$output" != *"[shellnium] GET "* ]]
 }
