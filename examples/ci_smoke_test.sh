@@ -85,7 +85,7 @@ check_page_loads() {
 main() {
     local test_page
     test_page=$(_create_test_page)
-    trap "rm -f '$test_page'" EXIT
+    trap "rm -f '$test_page'; cleanup_driver" EXIT
 
     local base_url="file://${test_page}"
 

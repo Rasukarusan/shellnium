@@ -12,12 +12,14 @@ init() {
   sessionId=$(new_session "$@")
   export BASE_URL="${ROOT}/session/${sessionId}"
 
-  if [ "$(is_ready)" != 'true' ]; then
-    printf "\e[35m[ERROR] chromedriver is not running.\e[m\n"
+  if [ -z "$sessionId" ] || [ "$sessionId" = "null" ]; then
+    printf "\e[35m[ERROR] Could not start a %s session.\e[m\n" "$SHELLNIUM_BROWSER"
     exit 1
   fi
 }
 
-setup_chromedriver
-trap cleanup_chromedriver EXIT
+setup_driver || exit 1
+trap cleanup_driver EXIT
+# The driver may have been started on a port chosen in setup.sh
+ROOT="${SHELLNIUM_DRIVER_URL}"
 init "$@"

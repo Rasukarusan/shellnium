@@ -58,9 +58,9 @@ cd shellnium
 - **curl**
 - **[jq](https://stedolan.github.io/jq/)**
 - **[unzip](https://infozip.sourceforge.net/UnZip.html)**
-- **Google Chrome** / **Chromium**
+- **Google Chrome** / **Chromium**, or **Firefox**
 
-ChromeDriver is **automatically downloaded and managed** by Shellnium. You don't need to install it manually.
+ChromeDriver (or GeckoDriver, for Firefox) is **automatically downloaded and managed** by Shellnium. You don't need to install it manually.
 
 #### Install dependencies
 
@@ -155,10 +155,13 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 
 | Environment Variable | Default | Description |
 |---|---|---|
+| `SHELLNIUM_BROWSER` | `chrome` | Browser to drive: `chrome` or `firefox` |
 | `SHELLNIUM_HEADLESS` | (unset) | Set to `true` or `1` to enable headless mode (no visible browser window) |
-| `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom ChromeDriver URL (disables auto-setup) |
-| `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
-| `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
+| `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom driver URL (disables auto-setup) |
+| `SHELLNIUM_PORT` | `9515` (`4444` for Firefox) | Port for the auto-started driver |
+| `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded drivers |
+| `SHELLNIUM_FIREFOX_BIN` | *(unset)* | Path to the Firefox binary, when it is not found automatically |
+| `SHELLNIUM_GECKODRIVER_VERSION` | *(latest)* | GeckoDriver version to download (e.g. `0.36.0`) |
 | `SHELLNIUM_DEBUG` | *(unset)* | Set to `true` to enable verbose debug logging |
 
 #### Debug Mode
@@ -170,6 +173,16 @@ SHELLNIUM_DEBUG=true bash demo.sh
 ```
 
 Debug output is written to stderr so it won't interfere with your script's normal output. WebDriver errors (e.g., element not found, stale element reference) are always surfaced to stderr regardless of debug mode.
+
+### Firefox
+
+Set `SHELLNIUM_BROWSER=firefox` to run the same script in Firefox. GeckoDriver is used from your `PATH` if it is there, and downloaded otherwise.
+
+```bash
+SHELLNIUM_BROWSER=firefox bash demo.sh
+```
+
+Arguments given when sourcing `selenium.sh` are passed to the selected browser, so they have to be ones it understands (e.g. `--lang=es` for Chrome, `-width 800` for Firefox).
 
 ### Headless Mode
 
@@ -256,7 +269,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Element State
 
-- `get_attribute` / `get_property` / `get_css_value`
+- `get_attribute` / `get_dom_attribute` / `get_property` / `get_css_value`
 - `get_text` / `get_tag_name` / `get_rect`
 - `is_element_enabled` / `is_element_displayed`
 
