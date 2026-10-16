@@ -81,7 +81,7 @@ teardown() {
   [[ "$output" == *'main'* ]]
 }
 
-@test "find_element builds correct JSON payload with id" {
+@test "find_element expresses the id strategy as a css selector" {
   curl() {
     for arg in "$@"; do
       echo "$arg"
@@ -92,11 +92,11 @@ teardown() {
 
   find_element 'id' 'my-element'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using": "id"'* ]]
-  [[ "$output" == *'"value": "my-element"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": "[id=\"my-element\"]"'* ]]
 }
 
-@test "find_element builds correct JSON payload with name" {
+@test "find_element expresses the name strategy as a css selector" {
   curl() {
     for arg in "$@"; do
       echo "$arg"
@@ -107,8 +107,8 @@ teardown() {
 
   find_element 'name' 'username'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using": "name"'* ]]
-  [[ "$output" == *'"value": "username"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": "[name=\"username\"]"'* ]]
 }
 
 @test "find_element builds correct JSON payload with tag name" {
@@ -577,4 +577,287 @@ teardown() {
 
 @test "KEY_F12 has correct W3C value (U+E03C)" {
   [[ "$KEY_F12" == "$(printf '\xee\x80\xbc')" ]]
+}
+
+# =====================
+# Wait helpers
+# =====================
+
+@test "_compare_lt compares decimal numbers" {
+  _compare_lt 0.4 1
+  _compare_lt 0.2 0.5
+  ! _compare_lt 1 1
+  ! _compare_lt 1.2 1
+}
+
+@test "_add adds decimal numbers" {
+  [ "$(_add 0 0.2)" = "0.2" ]
+  [ "$(_add 0.8 0.2)" = "1" ]
+  [ "$(_add 9.5 0.5)" = "10" ]
+}
+
+@test "wait_for_element times out with an interval below one second" {
+  find_element() { return 1; }
+  sleep() { echo "slept" >> "${BATS_TEST_TMPDIR}/sleeps.log"; }
+
+  run wait_for_element 'id' 'never' 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+  [ "$(wc -l < "${BATS_TEST_TMPDIR}/sleeps.log")" -eq 4 ]
+}
+
+# =====================
+# zsh compatibility
+# =====================
+
+@test "responses with backslashes survive under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"line1\\nline2 \\\\ end\"}"; }
+    get_page_source
+  ' zsh "$SHELLNIUM_DIR"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "line1" ]
+  [ "${lines[1]}" = 'line2 \ end' ]
+}
+
+@test "screenshot does not clobber PATH under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"aGVsbG8=\"}"; }
+    screenshot "$2/shot.png" && element_screenshot elem "$2/element.png"
+    cat "$2/shot.png" "$2/element.png"
+  ' zsh "$SHELLNIUM_DIR" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [ "$output" = "hellohello" ]
+}
+
+# =====================
+# W3C protocol
+# =====================
+
+# Log every curl argument on its own line and answer with $MOCK_RESPONSE.
+_mock_curl() {
+  export MOCK_RESPONSE="$1"
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo "$MOCK_RESPONSE"
+  }
+  export -f curl
+}
+
+@test "find_element expresses the class name strategy as a css selector" {
+  _mock_curl '{"value": {"ELEMENT": "elem-class"}}'
+
+  find_element 'class name' 'btn-primary'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": ".btn-primary"'* ]]
+}
+
+@test "_locator escapes quotes and backslashes in id values" {
+  run _locator 'id' 'a"b\c'
+  [ "$(echo "$output" | jq -r '.value')" = '[id="a\"b\\c"]' ]
+}
+
+@test "_locator leaves W3C strategies untouched" {
+  run _locator 'xpath' '//div[@id="x"]'
+  [ "$(echo "$output" | jq -r '.using')" = 'xpath' ]
+  [ "$(echo "$output" | jq -r '.value')" = '//div[@id="x"]' ]
+}
+
+@test "find_element reads the id from a W3C element reference" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "w3c-elem"}}'
+
+  run find_element 'css selector' 'h1'
+  [ "$status" -eq 0 ]
+  [ "$output" = "w3c-elem" ]
+}
+
+@test "find_element still reads the id from a legacy ELEMENT reference" {
+  _mock_curl '{"value": {"ELEMENT": "legacy-elem"}}'
+
+  run find_element 'css selector' 'h1'
+  [ "$status" -eq 0 ]
+  [ "$output" = "legacy-elem" ]
+}
+
+@test "find_elements reads every id from W3C element references" {
+  _mock_curl '{"value": [{"element-6066-11e4-a52e-4f735466cecf": "a"}, {"element-6066-11e4-a52e-4f735466cecf": "b"}]}'
+
+  run find_elements 'css selector' 'li'
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "a" ]
+  [ "${lines[1]}" = "b" ]
+}
+
+@test "find_element fails on a W3C error response" {
+  _mock_curl '{"value": {"error": "no such element", "message": "Unable to locate element"}}'
+
+  run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no such element"* ]]
+}
+
+@test "get_active_element reads the id from a W3C element reference" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "active-elem"}}'
+
+  run get_active_element
+  [ "$output" = "active-elem" ]
+}
+
+@test "new_session sends W3C capabilities" {
+  _mock_curl '{"value": {"sessionId": "w3c-session", "capabilities": {}}}'
+
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"capabilities"'* ]]
+  [[ "$output" == *'"alwaysMatch"'* ]]
+  [[ "$output" == *'"goog:chromeOptions"'* ]]
+  [[ "$output" != *'"desiredCapabilities"'* ]]
+}
+
+@test "new_session reads the session id from a W3C response" {
+  _mock_curl '{"value": {"sessionId": "w3c-session", "capabilities": {}}}'
+
+  run new_session
+  [ "$status" -eq 0 ]
+  [ "$output" = "w3c-session" ]
+}
+
+@test "new_session still reads the session id from a legacy response" {
+  _mock_curl '{"sessionId": "legacy-session", "status": 0, "value": {}}'
+
+  run new_session
+  [ "$status" -eq 0 ]
+  [ "$output" = "legacy-session" ]
+}
+
+@test "new_session fails when the driver refuses the session" {
+  _mock_curl '{"value": {"error": "session not created", "message": "no chrome binary"}}'
+
+  run new_session
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"session not created"* ]]
+}
+
+@test "new_session passes extra arguments and the headless flag to the browser" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  SHELLNIUM_HEADLESS=true new_session --lang=es
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"--lang=es"'* ]]
+  [[ "$output" == *'"--headless=new"'* ]]
+}
+
+@test "send_keys sends the text field required by W3C" {
+  _mock_curl '{"value": null}'
+
+  send_keys 'elem-1' 'hello'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"text": "hello"'* ]]
+  [[ "$output" == *'/element/elem-1/value'* ]]
+}
+
+@test "send_alert_text sends the text field required by W3C" {
+  _mock_curl '{"value": null}'
+
+  send_alert_text 'hello'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"text": "hello"'* ]]
+  [[ "$output" == *'/alert/text'* ]]
+}
+
+@test "click sends an empty JSON object as body" {
+  _mock_curl '{"value": null}'
+
+  click 'elem-1'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'{}'* ]]
+  [[ "$output" == *'/element/elem-1/click'* ]]
+}
+
+@test "switch_to_window sends the W3C handle field" {
+  _mock_curl '{"value": null}'
+
+  switch_to_window 'window-1'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"handle":"window-1"'* ]]
+}
+
+@test "switch_to_frame sends an integer as a frame index" {
+  _mock_curl '{"value": null}'
+
+  switch_to_frame 2
+  run cat "$CURL_LOG"
+  [[ "$output" == *'{"id":2}'* ]]
+}
+
+@test "switch_to_frame sends an element as a W3C element reference" {
+  _mock_curl '{"value": null}'
+
+  switch_to_frame 'frame-elem'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"frame-elem"'* ]]
+  [[ "$output" == *'/frame'* ]]
+}
+
+@test "switch_to_frame falls back to the frame id or name attribute" {
+  # Switching to "my-frame" as an element reference fails, so the frame is
+  # looked up by its id/name attribute and switched to as an element.
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    if [[ "$*" == *'/element'* ]]; then
+      echo '{"value": {"element-6066-11e4-a52e-4f735466cecf": "found-frame"}}'
+    elif [[ "$*" == *'"my-frame"'* ]]; then
+      echo '{"value": {"error": "no such element", "message": "bad element"}}'
+    else
+      echo '{"value": null}'
+    fi
+  }
+  export -f curl
+
+  run switch_to_frame 'my-frame'
+  [ "$status" -eq 0 ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'[id=\"my-frame\"],[name=\"my-frame\"]'* ]]
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"found-frame"'* ]]
+}
+
+@test "mouse_move_to uses a W3C element reference as origin" {
+  _mock_curl '{"value": null}'
+
+  mouse_move_to 'elem-abc'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-abc"'* ]]
+}
+
+@test "get_attribute asks the browser for the live value of the attribute" {
+  _mock_curl '{"value": "typed text"}'
+
+  run get_attribute 'elem-1' 'value'
+  [ "$output" = "typed text" ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/execute/sync'* ]]
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf": "elem-1"'* ]]
+  [[ "$output" == *'"value"'* ]]
+}
+
+@test "get_dom_attribute uses the W3C attribute endpoint" {
+  _mock_curl '{"value": "initial"}'
+
+  run get_dom_attribute 'elem-1' 'value'
+  [ "$output" = "initial" ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/element/elem-1/attribute/value'* ]]
 }

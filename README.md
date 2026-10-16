@@ -256,7 +256,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Element State
 
-- `get_attribute` / `get_property` / `get_css_value`
+- `get_attribute` / `get_dom_attribute` / `get_property` / `get_css_value`
 - `get_text` / `get_tag_name` / `get_rect`
 - `is_element_enabled` / `is_element_displayed`
 
