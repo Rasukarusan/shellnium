@@ -2,25 +2,123 @@
 
 ROOT=${SHELLNIUM_DRIVER_URL:-http://localhost:9515}
 
-# Debug logging - enable with SHELLNIUM_DEBUG=true
-_shellnium_log() {
+# Logging goes to stderr, so that stdout only carries results.
+# SHELLNIUM_LOG_LEVEL is one of debug, info, error (the default shows errors
+# and info) or none. SHELLNIUM_DEBUG=true is the same as debug.
+_log_enabled() {
+  local level="${SHELLNIUM_LOG_LEVEL:-info}"
   if [ "${SHELLNIUM_DEBUG:-}" = "true" ]; then
+    level="debug"
+  fi
+  case "$1" in
+    debug) [ "$level" = "debug" ] ;;
+    info)  [ "$level" = "debug" ] || [ "$level" = "info" ] ;;
+    error) [ "$level" != "none" ] ;;
+  esac
+}
+
+# Debug logging - enable with SHELLNIUM_DEBUG=true or SHELLNIUM_LOG_LEVEL=debug
+_shellnium_log() {
+  if _log_enabled debug; then
     echo "[shellnium] $*" >&2
   fi
 }
 
-# Check WebDriver error response and surface error messages to stderr
+_shellnium_error() {
+  if _log_enabled error; then
+    echo "[shellnium] $*" >&2
+  fi
+}
+
+# With SHELLNIUM_OUTPUT=json every function prints one JSON object:
+# {"ok":true,"value":...} on success (value is omitted when there is nothing
+# to return) and {"ok":false,"error":"...","message":"..."} on failure. The
+# exit code is the same as in the default plain output.
+_json_mode() {
+  [ "${SHELLNIUM_OUTPUT:-}" = "json" ]
+}
+
+# Run a function with plain output, whatever SHELLNIUM_OUTPUT says. For the
+# functions that build on other functions.
+_plain() {
+  SHELLNIUM_OUTPUT='' "$@"
+}
+
+# Report success, with no value or with the given string as value.
+_ok() {
+  if _json_mode; then
+    if [ $# -eq 0 ]; then
+      echo '{"ok":true}'
+    else
+      jq -cn --arg value "$1" '{ok: true, value: $value}'
+    fi
+  elif [ $# -gt 0 ]; then
+    printf '%s\n' "$1"
+  fi
+}
+
+# Report a failure and return 1.
+# usage: _fail "<error>" "<message>"
+_fail() {
+  _shellnium_error "$2"
+  if _json_mode; then
+    jq -cn --arg error "$1" --arg message "$2" '{ok: false, error: $error, message: $message}'
+  fi
+  return 1
+}
+
+# Check WebDriver error response and surface error messages to stderr.
+# No response at all (the driver is not running, the session is gone) is an
+# error too.
 _check_error() {
   local response="$1"
   local error
-  error=$(echo "$response" | jq -r '.value.error // empty' 2>/dev/null)
+  if [ -z "$response" ]; then
+    _fail "no response" "Error: no response from the driver"
+    return 1
+  fi
+  error=$(printf '%s\n' "$response" | jq -r '.value.error? // empty' 2>/dev/null)
   if [ -n "$error" ]; then
     local message
-    message=$(echo "$response" | jq -r '.value.message // empty' 2>/dev/null)
-    echo "[shellnium] Error: $error - $message" >&2
+    message=$(printf '%s\n' "$response" | jq -r '.value.message? // empty' 2>/dev/null)
+    _shellnium_error "Error: $error - $message"
+    if _json_mode; then
+      jq -cn --arg error "$error" --arg message "$message" '{ok: false, error: $error, message: $message}'
+    fi
     return 1
   fi
   return 0
+}
+
+# Check the response of a command that returns nothing.
+_done() {
+  _check_error "$1" || return 1
+  _ok
+}
+
+# Print the value of a response, or fail if it is a WebDriver error.
+# usage: _value "$response" [jq filter]
+_value() {
+  local response="$1"
+  local filter="${2:-.value}"
+  _check_error "$response" || return 1
+  if _json_mode; then
+    printf '%s\n' "$response" | jq -c "{ok: true, value: (${filter})}"
+  else
+    printf '%s\n' "$response" | jq -r "$filter"
+  fi
+}
+
+# Same for a response whose value is a list: one item per line, or the list
+# itself in JSON mode.
+_values() {
+  local response="$1"
+  _check_error "$response" || return 1
+  if _json_mode; then
+    printf '%s\n' "$response" | jq -c '{ok: true, value: .value}'
+  else
+    printf '%s\n' "$response" | jq -r '.value[]'
+  fi
 }
 
 ##############################
@@ -68,7 +166,7 @@ _GET() {
   local response
   response=$(curl -s -X GET "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 _POST() {
@@ -76,7 +174,7 @@ _POST() {
   local response
   response=$(curl -s -X POST -H "Content-Type: application/json" "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
 }
 
 _DELETE() {
@@ -84,7 +182,47 @@ _DELETE() {
   local response
   response=$(curl -s -X DELETE "$@")
   _shellnium_log "Response: $response"
-  echo "$response"
+  printf '%s\n' "$response"
+}
+
+##############################
+# Element references
+##############################
+
+# Key under which the W3C WebDriver protocol returns an element reference.
+# https://www.w3.org/TR/webdriver/#elements
+W3C_ELEMENT_KEY="element-6066-11e4-a52e-4f735466cecf"
+
+# Read the element id(s) out of a find-element response. Drivers that still
+# answer in the legacy JSON Wire format use the "ELEMENT" key instead.
+_element_id() {
+  jq -r --arg key "$W3C_ELEMENT_KEY" '.value | (.[$key] // .ELEMENT)'
+}
+
+_element_ids() {
+  jq -r --arg key "$W3C_ELEMENT_KEY" '.value[] | (.[$key] // .ELEMENT)'
+}
+
+# Print the element(s) of a find-element response.
+_emit_element() {
+  if _json_mode; then
+    printf '%s\n' "$1" | _element_id | jq -R '{ok: true, value: .}' | jq -c .
+  else
+    printf '%s\n' "$1" | _element_id
+  fi
+}
+
+_emit_elements() {
+  if _json_mode; then
+    printf '%s\n' "$1" | jq -c --arg key "$W3C_ELEMENT_KEY" '{ok: true, value: [.value[] | (.[$key] // .ELEMENT)]}'
+  else
+    printf '%s\n' "$1" | _element_ids
+  fi
+}
+
+# Build the JSON reference to an element, as expected in request payloads.
+_element_ref() {
+  jq -cn --arg key "$W3C_ELEMENT_KEY" --arg id "$1" '{($key): $id, ELEMENT: $id}'
 }
 
 ##############################
@@ -95,8 +233,17 @@ is_ready() {
   _GET "${ROOT}/status" | jq -r '.value.ready'
 }
 
-new_session() {
-  local chromeOptions binaryClause
+# JSON list of the given strings
+_json_array() {
+  if [ $# -eq 0 ]; then
+    echo '[]'
+  else
+    printf '%s\n' "$@" | jq -R . | jq -sc .
+  fi
+}
+
+# Capabilities for Chrome. Extra arguments are passed to the browser.
+_chrome_capabilities() {
   # Always include anti-automation-detection flags
   local allArgs=(
     "--disable-blink-features=AutomationControlled"
@@ -109,40 +256,70 @@ new_session() {
   if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
     allArgs+=("--headless=new")
   fi
-  chromeOptions=$(for i in "${allArgs[@]}"; do printf '"%s",' "${i}"; done | sed 's/,$//')
 
   # Point to downloaded chrome-headless-shell binary if set
-  binaryClause=""
-  if [ -n "${SHELLNIUM_CHROME_BIN:-}" ]; then
-    binaryClause=$(printf '"binary": "%s",' "$SHELLNIUM_CHROME_BIN")
-  fi
-
-  _POST -d '{
-    "desiredCapabilities": {
-      "browserName":"chrome",
-      "chromeOptions": {
-        '"${binaryClause}"'
-        "args": ['"${chromeOptions}"'],
-        "excludeSwitches": ["enable-automation", "enable-logging"],
-        "useAutomationExtension": false
+  jq -n --argjson args "$(_json_array "${allArgs[@]}")" --arg binary "${SHELLNIUM_CHROME_BIN:-}" '{
+    capabilities: {
+      alwaysMatch: {
+        browserName: "chrome",
+        "goog:chromeOptions": ({
+          args: $args,
+          excludeSwitches: ["enable-automation", "enable-logging"],
+          useAutomationExtension: false
+        } + (if $binary == "" then {} else {binary: $binary} end))
       }
     }
-  }' "${ROOT}/session" | jq -r '.sessionId'
+  }'
+}
+
+# Capabilities for Firefox. Extra arguments are passed to the browser.
+_firefox_capabilities() {
+  # Firefox keeps the first value of a repeated argument, so the defaults go
+  # last and can be overridden.
+  local allArgs=("$@" "-width" "1920" "-height" "1080")
+
+  if [ "${SHELLNIUM_HEADLESS:-}" = "true" ] || [ "${SHELLNIUM_HEADLESS:-}" = "1" ]; then
+    allArgs+=("-headless")
+  fi
+
+  jq -n --argjson args "$(_json_array "${allArgs[@]}")" --arg binary "${SHELLNIUM_FIREFOX_BIN:-}" '{
+    capabilities: {
+      alwaysMatch: {
+        browserName: "firefox",
+        "moz:firefoxOptions": ({args: $args} + (if $binary == "" then {} else {binary: $binary} end))
+      }
+    }
+  }'
+}
+
+new_session() {
+  local capabilities response
+  case "${SHELLNIUM_BROWSER:-chrome}" in
+    firefox) capabilities=$(_firefox_capabilities "$@") ;;
+    *)       capabilities=$(_chrome_capabilities "$@") ;;
+  esac
+
+  response=$(_POST -d "$capabilities" "${ROOT}/session")
+  _value "$response" '.value.sessionId // .sessionId'
 }
 
 delete_session() {
   local response
   response=$(_DELETE "${BASE_URL}")
-  _check_error "$response"
+  _done "$response"
 }
 
 get_all_cookies() {
-  _GET "${BASE_URL}/cookie" | jq -r '.value[]'
+  local response
+  response=$(_GET "${BASE_URL}/cookie")
+  _values "$response"
 }
 
 get_named_cookie() {
   local name=$1
-  _GET "${BASE_URL}/cookie/${name}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/cookie/${name}")
+  _value "$response"
 }
 
 add_cookie() {
@@ -150,20 +327,20 @@ add_cookie() {
   local value="{\"cookie\": ${cookie}}"
   local response
   response=$(_POST -d "$value" "${BASE_URL}/cookie")
-  _check_error "$response"
+  _done "$response"
 }
 
 delete_cookie() {
   local name=$1
   local response
   response=$(_DELETE "${BASE_URL}/cookie/${name}")
-  _check_error "$response"
+  _done "$response"
 }
 
 delete_all_cookies() {
   local response
   response=$(_DELETE "${BASE_URL}/cookie")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -175,40 +352,46 @@ navigate_to() {
   local payload response
   payload=$(jq -n --arg url "$url" '{url: $url}')
   response=$(_POST -d "$payload" "${BASE_URL}/url")
-  _check_error "$response"
+  _done "$response"
 }
 
 get_current_url() {
-  _GET "${BASE_URL}/url" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/url")
+  _value "$response"
 }
 
 get_title() {
-  _GET "${BASE_URL}/title" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/title")
+  _value "$response"
 }
 
 back() {
   local response
-  response=$(_POST "${BASE_URL}/back")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/back")
+  _done "$response"
 }
 
 forward() {
   local response
-  response=$(_POST "${BASE_URL}/forward")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/forward")
+  _done "$response"
 }
 
 refresh() {
   local response
-  response=$(_POST "${BASE_URL}/refresh")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/refresh")
+  _done "$response"
 }
 
 ##############################
 # Timeouts
 ##############################
 get_timeouts() {
-  _GET "${BASE_URL}/timeouts" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/timeouts")
+  _value "$response"
 }
 
 set_timeouts() {
@@ -217,28 +400,28 @@ set_timeouts() {
   local implicit=$3
   local response
   response=$(_POST -d "{\"script\": $script, \"pageLoad\": $pageLoad, \"implicit\": $implicit}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_script() {
   local script=$1
   local response
   response=$(_POST -d "{\"script\": $script}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_pageLoad() {
   local pageLoad=$1
   local response
   response=$(_POST -d "{\"pageLoad\": $pageLoad}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 set_timeout_implicit() {
   local implicit=$1
   local response
   response=$(_POST -d "{\"implicit\": $implicit}" "${BASE_URL}/timeouts")
-  _check_error "$response"
+  _done "$response"
 }
 
 ##############################
@@ -256,24 +439,36 @@ set_timeout_implicit() {
 #   - "class name"
 #   - "xpath"
 #
+# The W3C protocol only knows "css selector", "link text", "partial link
+# text", "tag name" and "xpath". The other strategies are expressed as CSS.
+_locator() {
+  jq -n --arg using "$1" --arg value "$2" '
+    def quoted: "\"" + ($value | gsub("\\\\"; "\\\\") | gsub("\""; "\\\"")) + "\"";
+    if   $using == "id"         then {using: "css selector", value: ("[id=" + quoted + "]")}
+    elif $using == "name"       then {using: "css selector", value: ("[name=" + quoted + "]")}
+    elif $using == "class name" then {using: "css selector", value: ("." + $value)}
+    else {using: $using, value: $value}
+    end'
+}
+
 find_element() {
   local property=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value.ELEMENT'
+  _emit_element "$response"
 }
 
 find_elements() {
   local property=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/elements")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value[].ELEMENT'
+  _emit_elements "$response"
 }
 
 find_element_from_element() {
@@ -281,10 +476,10 @@ find_element_from_element() {
   local property=$2
   local value=$3
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/element")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value.ELEMENT'
+  _emit_element "$response"
 }
 
 find_elements_from_element() {
@@ -292,64 +487,124 @@ find_elements_from_element() {
   local property=$2
   local value=$3
   local payload response
-  payload=$(jq -n --arg using "$property" --arg value "$value" '{using: $using, value: $value}')
+  payload=$(_locator "$property" "$value")
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/elements")
   _check_error "$response" || return 1
-  echo "$response" | jq -r '.value[].ELEMENT'
+  _emit_elements "$response"
 }
 
 get_active_element() {
-  _GET "${BASE_URL}/element/active" | jq -r '.value.ELEMENT'
+  local response
+  response=$(_GET "${BASE_URL}/element/active")
+  _check_error "$response" || return 1
+  _emit_element "$response"
 }
 
 get_alert_text() {
-  _GET "${BASE_URL}/alert/text" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/alert/text")
+  _value "$response"
 }
 
 ##############################
 # Element State
 ##############################
 
+# Selenium-style attribute lookup. The W3C "Get Element Attribute" command
+# only returns what is written in the HTML, so the current value of an input
+# or the state of a checkbox would be lost. This mirrors what the drivers did
+# in legacy mode (and what Selenium clients still do): prefer the live
+# property, and fall back to the attribute.
+_GET_ATTRIBUTE_SCRIPT='
+var e = arguments[0], n = arguments[1], l = n.toLowerCase();
+var booleans = ["async", "autofocus", "autoplay", "checked", "controls", "default", "defer", "disabled", "hidden", "loop", "multiple", "muted", "novalidate", "open", "readonly", "required", "reversed", "selected"];
+var aliases = {"class": "className", "readonly": "readOnly"};
+if (l === "style") { return e.style.cssText; }
+if (l === "selected" || l === "checked") {
+  var on = e.tagName === "OPTION" ? e.selected : e.checked;
+  return on ? "true" : null;
+}
+if (booleans.indexOf(l) >= 0) {
+  return (e.hasAttribute(n) || e[aliases[l] || n] === true) ? "true" : null;
+}
+if ((e.tagName === "A" && l === "href") || (e.tagName === "IMG" && l === "src")) {
+  return e.hasAttribute(n) ? e[l] : null;
+}
+var p = e[aliases[n] || n];
+if (p === null || p === undefined || typeof p === "object" || typeof p === "function") {
+  return e.getAttribute(n);
+}
+return String(p);'
+
 get_attribute() {
   local elementId=$1
   local name=$2
-  _GET "${BASE_URL}/element/${elementId}/attribute/${name}" | jq -r '.value'
+  local payload
+  payload=$(jq -n --arg script "$_GET_ATTRIBUTE_SCRIPT" --argjson element "$(_element_ref "$elementId")" --arg name "$name" \
+    '{script: $script, args: [$element, $name]}')
+  local response
+  response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
+  _value "$response"
+}
+
+# The attribute exactly as written in the HTML, or null when it is absent.
+# https://www.w3.org/TR/webdriver/#get-element-attribute
+get_dom_attribute() {
+  local elementId=$1
+  local name=$2
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/attribute/${name}")
+  _value "$response"
 }
 
 get_property() {
   local elementId=$1
   local name=$2
-  _GET "${BASE_URL}/element/${elementId}/property/${name}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/property/${name}")
+  _value "$response"
 }
 
 get_css_value() {
   local elementId=$1
   local propertyName=$2
-  _GET "${BASE_URL}/element/${elementId}/css/${propertyName}" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/css/${propertyName}")
+  _value "$response"
 }
 
 get_text() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/text" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/text")
+  _value "$response"
 }
 
 get_tag_name() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/name" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/name")
+  _value "$response"
 }
 
 get_rect() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/rect" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/rect")
+  _value "$response"
 }
 
 get_page_source() {
-  _GET "${BASE_URL}/source" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/source")
+  _value "$response"
 }
 
 is_element_enabled() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/enabled" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/enabled")
+  _value "$response"
 }
 
 ##############################
@@ -360,31 +615,31 @@ send_keys() {
   local elementId=$1
   local value=$2
   local payload response
-  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  payload=$(jq -n --arg value "$value" '{text: $value, value: [$value]}')
   response=$(_POST -d "$payload" "${BASE_URL}/element/${elementId}/value")
-  _check_error "$response"
+  _done "$response"
 }
 
 send_alert_text() {
   local value=$1
   local payload response
-  payload=$(jq -n --arg value "$value" '{value: [$value]}')
+  payload=$(jq -n --arg value "$value" '{text: $value}')
   response=$(_POST -d "$payload" "${BASE_URL}/alert/text")
-  _check_error "$response"
+  _done "$response"
 }
 
 click() {
   local elementId=$1
   local response
-  response=$(_POST "${BASE_URL}/element/${elementId}/click")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/click")
+  _done "$response"
 }
 
 element_clear() {
   local elementId=$1
   local response
-  response=$(_POST "${BASE_URL}/element/${elementId}/clear")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/element/${elementId}/clear")
+  _done "$response"
 }
 
 ##############################
@@ -392,7 +647,14 @@ element_clear() {
 ##############################
 
 get_source() {
-	_GET "${BASE_URL}/source"
+  local response
+  response=$(_GET "${BASE_URL}/source")
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response"
+  fi
 }
 
 exec_script() {
@@ -406,19 +668,31 @@ exec_script() {
   payload=$(printf '{"script": %s, "args": %s}' "$script" "$args")
   local response
   response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
-  _check_error "$response" || return 1
-  echo "$response"
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response"
+  fi
 }
 
 element_screenshot() {
   local elementId=$1
-  local path=${2:-./screenshot.png}
-  _GET "${BASE_URL}/element/${elementId}/screenshot" | jq -r '.value' | base64 -d > "$path"
+  local file=${2:-./screenshot.png}
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/screenshot")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
+  _ok
 }
 
 screenshot() {
-  local path=${1:-./screenshot.png}
-  _GET "${BASE_URL}/screenshot" | jq -r '.value' | base64 -d > "$path"
+  local file=${1:-./screenshot.png}
+  local response
+  response=$(_GET "${BASE_URL}/screenshot")
+  _check_error "$response" || return 1
+  printf '%s\n' "$response" | jq -r '.value' | base64 -d > "$file"
+  _ok
 }
 
 
@@ -427,27 +701,35 @@ screenshot() {
 ##############################
 
 get_window_handle() {
-  _GET "${BASE_URL}/window" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/window")
+  _value "$response"
 }
 
 get_window_handles() {
-  _GET "${BASE_URL}/window/handles" | jq -r '.value[]'
+  local response
+  response=$(_GET "${BASE_URL}/window/handles")
+  _values "$response"
 }
 
 delete_window() {
-  curl -s -X DELETE "${BASE_URL}/window"
+  local response
+  response=$(_DELETE "${BASE_URL}/window")
+  _done "$response"
 }
 
 new_window() {
   local type=$1 # 'tab' or 'window'
-  _POST -d "{\"type\":\"$type\"}" "${BASE_URL}/window/new" | jq -r '.value.handle'
+  local response
+  response=$(_POST -d "{\"type\":\"$type\"}" "${BASE_URL}/window/new")
+  _value "$response" '.value.handle'
 }
 
 switch_to_window() {
   local handle=$1
   local response
-  response=$(_POST -d "{\"name\":\"$handle\"}" "${BASE_URL}/window")
-  _check_error "$response"
+  response=$(_POST -d "{\"handle\":\"$handle\",\"name\":\"$handle\"}" "${BASE_URL}/window")
+  _done "$response"
 }
 
 #
@@ -458,48 +740,56 @@ switch_to_window() {
 #
 switch_to_frame() {
   local id=$1
+  local response
 
-  # is element
-  local frameId
-  frameId=$(get_attribute "$id" 'id')
-  if ! echo "$frameId" | grep "stale element reference" >/dev/null ; then
-    local response
-    response=$(_POST -d "{\"id\":\"$frameId\"}" "${BASE_URL}/frame")
-    _check_error "$response"
+  # is integer
+  if [[ "$id" =~ ^[0-9]+$ ]]; then
+    response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
+    _done "$response"
     return
   fi
 
-  local response
-  if expr "$id" : "[0-9]*$" >&/dev/null;then # is integer
-    response=$(_POST -d "{\"id\":$id}" "${BASE_URL}/frame")
-  else # is id
-    response=$(_POST -d "{\"id\":\"$id\"}" "${BASE_URL}/frame")
+  # is element
+  response=$(_POST -d "{\"id\":$(_element_ref "$id")}" "${BASE_URL}/frame")
+  if _plain _check_error "$response" 2>/dev/null; then
+    _ok
+    return 0
   fi
-  _check_error "$response"
+
+  # is the id (or name) attribute of a frame
+  local frame
+  frame=$(_plain find_element 'css selector' "[id=\"$id\"],[name=\"$id\"]") || {
+    _fail "no such frame" "Error: no such frame - $id"
+    return 1
+  }
+  response=$(_POST -d "{\"id\":$(_element_ref "$frame")}" "${BASE_URL}/frame")
+  _done "$response"
 }
 
 switch_to_parent_frame() {
   local response
-  response=$(_POST "${BASE_URL}/frame/parent")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/frame/parent")
+  _done "$response"
 }
 
 dismiss_alert() {
   local handle=$1
   local response
-  response=$(_POST "${BASE_URL}/alert/dismiss")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/alert/dismiss")
+  _done "$response"
 }
 
 accept_alert() {
   local handle=$1
   local response
-  response=$(_POST "${BASE_URL}/alert/accept")
-  _check_error "$response"
+  response=$(_POST -d '{}' "${BASE_URL}/alert/accept")
+  _done "$response"
 }
 
 get_window_rect() {
-  _GET "${BASE_URL}/window/rect" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/window/rect")
+  _value "$response"
 }
 
 set_window_rect() {
@@ -507,19 +797,27 @@ set_window_rect() {
   local y=$2
   local width=$3
   local height=$4
-  _POST -d "{\"x\": $x, \"y\": $y, \"width\": $width, \"height\": $height}" "${BASE_URL}/window/rect" | jq -r '.value'
+  local response
+  response=$(_POST -d "{\"x\": $x, \"y\": $y, \"width\": $width, \"height\": $height}" "${BASE_URL}/window/rect")
+  _value "$response"
 }
 
 maximize_window() {
-  _POST "${BASE_URL}/window/maximize" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/maximize")
+  _value "$response"
 }
 
 minimize_window() {
-  _POST "${BASE_URL}/window/minimize" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/minimize")
+  _value "$response"
 }
 
 fullscreen_window() {
-  _POST "${BASE_URL}/window/fullscreen" | jq -r '.value'
+  local response
+  response=$(_POST -d '{}' "${BASE_URL}/window/fullscreen")
+  _value "$response"
 }
 
 ##############################
@@ -530,12 +828,16 @@ fullscreen_window() {
 # https://www.w3.org/TR/webdriver/#perform-actions
 perform_actions() {
   local actions_json="$1"
-  _POST -d "$actions_json" "${BASE_URL}/actions" >/dev/null
+  local response
+  response=$(_POST -d "$actions_json" "${BASE_URL}/actions")
+  _done "$response"
 }
 
 # Release all actions
 release_actions() {
-  _DELETE "${BASE_URL}/actions" >/dev/null
+  local response
+  response=$(_DELETE "${BASE_URL}/actions")
+  _done "$response"
 }
 
 # ---- Mouse Actions (convenience wrappers) ----
@@ -543,21 +845,27 @@ release_actions() {
 # Move mouse to element
 mouse_move_to() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Double click on element
 double_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 
 # Right click (context menu) on element
 right_click() {
   local element_id="$1"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${element_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
+  local actions origin
+  origin=$(_element_ref "$element_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":2},{\"type\":\"pointerUp\",\"button\":2}]}]}"
   perform_actions "$actions"
 }
 
@@ -570,7 +878,10 @@ hover() {
 drag_and_drop() {
   local source_id="$1"
   local target_id="$2"
-  local actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":{\"ELEMENT\":\"${source_id}\"},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pause\",\"duration\":200},{\"type\":\"pointerMove\",\"duration\":500,\"origin\":{\"ELEMENT\":\"${target_id}\"},\"x\":0,\"y\":0},{\"type\":\"pause\",\"duration\":100},{\"type\":\"pointerUp\",\"button\":0}]}]}"
+  local actions origin_source origin_target
+  origin_source=$(_element_ref "$source_id")
+  origin_target=$(_element_ref "$target_id")
+  actions="{\"actions\":[{\"type\":\"pointer\",\"id\":\"mouse\",\"parameters\":{\"pointerType\":\"mouse\"},\"actions\":[{\"type\":\"pointerMove\",\"duration\":100,\"origin\":${origin_source},\"x\":0,\"y\":0},{\"type\":\"pointerDown\",\"button\":0},{\"type\":\"pause\",\"duration\":200},{\"type\":\"pointerMove\",\"duration\":500,\"origin\":${origin_target},\"x\":0,\"y\":0},{\"type\":\"pause\",\"duration\":100},{\"type\":\"pointerUp\",\"button\":0}]}]}"
   perform_actions "$actions"
 }
 
@@ -612,33 +923,23 @@ send_key_combo() {
 
 is_element_displayed() {
   local elementId=$1
-  _GET "${BASE_URL}/element/${elementId}/displayed" | jq -r '.value'
+  local response
+  response=$(_GET "${BASE_URL}/element/${elementId}/displayed")
+  _value "$response"
 }
 
 ##############################
 # Wait / Retry
 ##############################
 
-# Compare two numbers (supports float if bc is available, integer-only fallback)
+# Compare two numbers, which may have decimals
 _compare_lt() {
-  local a=$1
-  local b=$2
-  if command -v bc >/dev/null 2>&1; then
-    [ "$(echo "$a < $b" | bc)" -eq 1 ]
-  else
-    [ "${a%.*}" -lt "${b%.*}" ]
-  fi
+  awk -v a="$1" -v b="$2" 'BEGIN { exit !(a < b) }'
 }
 
-# Add two numbers (supports float if bc is available, integer-only fallback)
+# Add two numbers, which may have decimals
 _add() {
-  local a=$1
-  local b=$2
-  if command -v bc >/dev/null 2>&1; then
-    echo "$a + $b" | bc
-  else
-    echo $(( ${a%.*} + ${b%.*} ))
-  fi
+  awk -v a="$1" -v b="$2" 'BEGIN { print a + b }'
 }
 
 # Wait until an element is found
@@ -652,17 +953,16 @@ wait_for_element() {
   local element=""
 
   while _compare_lt "$elapsed" "$timeout"; do
-    element=$(find_element "$property" "$value" 2>/dev/null)
+    element=$(_plain find_element "$property" "$value" 2>/dev/null)
     if [ -n "$element" ] && [ "$element" != "null" ]; then
-      echo "$element"
+      _ok "$element"
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: element not found ($property: $value) after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: element not found ($property: $value) after ${timeout}s"
 }
 
 # Wait until an element is displayed and enabled (clickable)
@@ -676,14 +976,14 @@ wait_for_clickable() {
   local element=""
 
   while _compare_lt "$elapsed" "$timeout"; do
-    element=$(find_element "$property" "$value" 2>/dev/null)
+    element=$(_plain find_element "$property" "$value" 2>/dev/null)
     if [ -n "$element" ] && [ "$element" != "null" ]; then
       local displayed
       local enabled
-      displayed=$(is_element_displayed "$element" 2>/dev/null)
-      enabled=$(is_element_enabled "$element" 2>/dev/null)
+      displayed=$(_plain is_element_displayed "$element" 2>/dev/null)
+      enabled=$(_plain is_element_enabled "$element" 2>/dev/null)
       if [ "$displayed" = "true" ] && [ "$enabled" = "true" ]; then
-        echo "$element"
+        _ok "$element"
         return 0
       fi
     fi
@@ -691,8 +991,7 @@ wait_for_clickable() {
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: element not clickable ($property: $value) after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: element not clickable ($property: $value) after ${timeout}s"
 }
 
 # Wait until specific text appears in the page source
@@ -705,16 +1004,16 @@ wait_for_text() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local source
-    source=$(get_page_source 2>/dev/null)
-    if echo "$source" | grep -q "$text"; then
+    source=$(_plain get_page_source 2>/dev/null)
+    if printf '%s\n' "$source" | grep -q "$text"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: text not found ('$text') after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: text not found ('$text') after ${timeout}s"
 }
 
 # Wait until the current URL matches a pattern (grep regex)
@@ -727,16 +1026,60 @@ wait_for_url() {
 
   while _compare_lt "$elapsed" "$timeout"; do
     local url
-    url=$(get_current_url 2>/dev/null)
-    if echo "$url" | grep -q "$pattern"; then
+    url=$(_plain get_current_url 2>/dev/null)
+    if printf '%s\n' "$url" | grep -q "$pattern"; then
+      _ok
       return 0
     fi
     sleep "$interval"
     elapsed=$(_add "$elapsed" "$interval")
   done
 
-  echo "[shellnium] Timeout: URL did not match ('$pattern') after ${timeout}s" >&2
-  return 1
+  _fail "timeout" "Timeout: URL did not match ('$pattern') after ${timeout}s"
+}
+
+# Wait until the current URL contains a string
+# usage: wait_for_url_contains "/dashboard" [timeout_sec] [interval_sec]
+wait_for_url_contains() {
+  local text="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local url
+    url=$(_plain get_current_url 2>/dev/null)
+    if printf '%s\n' "$url" | grep -qF -- "$text"; then
+      _ok
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  _fail "timeout" "Timeout: URL did not contain '$text' after ${timeout}s"
+}
+
+# Wait until the page title contains a string
+# usage: wait_for_title_contains "Dashboard" [timeout_sec] [interval_sec]
+wait_for_title_contains() {
+  local text="$1"
+  local timeout="${2:-10}"
+  local interval="${3:-0.5}"
+  local elapsed=0
+
+  while _compare_lt "$elapsed" "$timeout"; do
+    local title
+    title=$(_plain get_title 2>/dev/null)
+    if printf '%s\n' "$title" | grep -qF -- "$text"; then
+      _ok
+      return 0
+    fi
+    sleep "$interval"
+    elapsed=$(_add "$elapsed" "$interval")
+  done
+
+  _fail "timeout" "Timeout: title did not contain '$text' after ${timeout}s"
 }
 
 # Retry a command up to N times
@@ -750,7 +1093,7 @@ retry() {
 
   while [ "$attempt" -le "$max_attempts" ]; do
     if result=$("$@" 2>/dev/null) && [ -n "$result" ] && [ "$result" != "null" ]; then
-      echo "$result"
+      printf '%s\n' "$result"
       return 0
     fi
     if [ "$attempt" -lt "$max_attempts" ]; then
@@ -761,4 +1104,258 @@ retry() {
 
   echo "[shellnium] Retry failed after ${max_attempts} attempts: $*" >&2
   return 1
+}
+
+##############################
+# Assertions
+##############################
+# Check that an action had the intended effect. They print nothing and return
+# 0 when the check holds; otherwise they explain the difference on stderr and
+# return 1.
+
+# usage: _assert_equals "<what>" "<actual>" "<expected>"
+_assert_equals() {
+  if [ "$2" = "$3" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: $1 is '$2', expected '$3'"
+  fi
+}
+
+# usage: _assert_contains "<what>" "<actual>" "<expected part>"
+_assert_contains() {
+  case "$2" in
+    *"$3"*) _ok ;;
+    *) _fail "assertion failed" "Assertion failed: $1 is '$2', expected it to contain '$3'" ;;
+  esac
+}
+
+# usage: assert_url "https://example.com/dashboard"
+assert_url() {
+  local actual
+  actual=$(_plain get_current_url) || { _fail "assertion failed" "Assertion failed: could not read the URL"; return 1; }
+  _assert_equals "URL" "$actual" "$1"
+}
+
+# usage: assert_url_contains "/dashboard"
+assert_url_contains() {
+  local actual
+  actual=$(_plain get_current_url) || { _fail "assertion failed" "Assertion failed: could not read the URL"; return 1; }
+  _assert_contains "URL" "$actual" "$1"
+}
+
+# usage: assert_title "Dashboard"
+assert_title() {
+  local actual
+  actual=$(_plain get_title) || { _fail "assertion failed" "Assertion failed: could not read the title"; return 1; }
+  _assert_equals "title" "$actual" "$1"
+}
+
+# usage: assert_title_contains "Dash"
+assert_title_contains() {
+  local actual
+  actual=$(_plain get_title) || { _fail "assertion failed" "Assertion failed: could not read the title"; return 1; }
+  _assert_contains "title" "$actual" "$1"
+}
+
+# usage: assert_element_text "$element" "Success"
+assert_element_text() {
+  local actual
+  actual=$(_plain get_text "$1") || { _fail "assertion failed" "Assertion failed: could not read the element text"; return 1; }
+  _assert_equals "element text" "$actual" "$2"
+}
+
+# usage: assert_element_text_contains "$element" "Succ"
+assert_element_text_contains() {
+  local actual
+  actual=$(_plain get_text "$1") || { _fail "assertion failed" "Assertion failed: could not read the element text"; return 1; }
+  _assert_contains "element text" "$actual" "$2"
+}
+
+# usage: assert_element_exists 'css selector' '.success'
+assert_element_exists() {
+  local elements
+  elements=$(_plain find_elements "$1" "$2" 2>/dev/null)
+  if [ -n "$elements" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: no element matches ($1: $2)"
+  fi
+}
+
+# usage: assert_element_not_exists 'css selector' '.error'
+assert_element_not_exists() {
+  local elements
+  elements=$(_plain find_elements "$1" "$2" 2>/dev/null)
+  if [ -z "$elements" ]; then
+    _ok
+  else
+    _fail "assertion failed" "Assertion failed: an element matches ($1: $2)"
+  fi
+}
+
+##############################
+# Page Introspection
+##############################
+# Discover what is on a page without knowing its selectors beforehand. Every
+# function prints JSON, and every element comes with a "selector" that can be
+# handed to find_element 'css selector'.
+
+# Helpers shared by the introspection scripts.
+_INTROSPECTION_HELPERS='
+function clean(text) { return (text || "").replace(/\s+/g, " ").trim(); }
+function visible(e) {
+  var r = e.getBoundingClientRect(), c = getComputedStyle(e);
+  return r.width > 0 && r.height > 0 && c.visibility !== "hidden" && c.display !== "none";
+}
+function hasUniqueId(e) {
+  return e.id && document.querySelectorAll("#" + CSS.escape(e.id)).length === 1;
+}
+function selector(e) {
+  var parts = [];
+  while (e && e.nodeType === 1 && e !== document.documentElement) {
+    if (hasUniqueId(e)) { parts.unshift("#" + CSS.escape(e.id)); break; }
+    var n = 1, s = e;
+    while ((s = s.previousElementSibling)) { if (s.tagName === e.tagName) { n++; } }
+    parts.unshift(e.tagName.toLowerCase() + ":nth-of-type(" + n + ")");
+    e = e.parentElement;
+  }
+  return parts.join(" > ");
+}
+function label(e) {
+  if (e.labels && e.labels.length) { return clean(e.labels[0].innerText); }
+  return clean(e.getAttribute("aria-label") || e.title || "");
+}
+function compact(o) {
+  Object.keys(o).forEach(function (k) { if (o[k] === "" || o[k] === null || o[k] === undefined) { delete o[k]; } });
+  return o;
+}
+'
+
+# Run a script and print its result as compact JSON.
+# usage: _exec_json "$script" [json array of arguments]
+_exec_json() {
+  local payload response
+  payload=$(jq -n --arg script "$1" --argjson args "${2:-[]}" '{script: $script, args: $args}')
+  response=$(_POST -d "$payload" "${BASE_URL}/execute/sync")
+  if _json_mode; then
+    _value "$response"
+  else
+    _check_error "$response" || return 1
+    printf '%s\n' "$response" | jq -c '.value'
+  fi
+}
+
+# Visible elements a user could click: links, buttons and the like.
+# usage: get_clickable_elements [max_elements]
+get_clickable_elements() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var max = arguments[0];
+    var found = document.querySelectorAll("a[href], area[href], button, summary, input[type=submit], input[type=button], input[type=reset], input[type=image], [role=button], [role=link], [onclick]");
+    var out = [];
+    for (var i = 0; i < found.length && out.length < max; i++) {
+      var e = found[i];
+      if (!visible(e) || e.disabled) { continue; }
+      out.push(compact({
+        tag: e.tagName.toLowerCase(),
+        text: clean(e.innerText || e.value || e.getAttribute("aria-label") || e.title || e.alt).slice(0, 120),
+        id: e.id,
+        name: e.getAttribute("name"),
+        type: e.getAttribute("type"),
+        href: e.href && typeof e.href === "string" ? e.href : null,
+        selector: selector(e)
+      }));
+    }
+    return out;' "[${1:-200}]"
+}
+
+# Fields of the forms on the page. Passwords are never included.
+# usage: get_form_fields
+get_form_fields() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var found = document.querySelectorAll("input, select, textarea");
+    var skipped = ["hidden", "submit", "button", "reset", "image"];
+    var out = [];
+    for (var i = 0; i < found.length; i++) {
+      var e = found[i], tag = e.tagName.toLowerCase();
+      var type = tag === "input" ? (e.getAttribute("type") || "text").toLowerCase() : tag;
+      if (skipped.indexOf(type) >= 0) { continue; }
+      var field = {
+        tag: tag,
+        type: type,
+        name: e.getAttribute("name"),
+        id: e.id,
+        label: label(e),
+        placeholder: e.getAttribute("placeholder"),
+        value: type === "password" || type === "checkbox" || type === "radio" ? null : e.value,
+        selector: selector(e)
+      };
+      if (type === "checkbox" || type === "radio") { field.checked = e.checked; field.option = e.value; }
+      if (tag === "select") {
+        field.options = Array.prototype.map.call(e.options, function (o) {
+          return compact({value: o.value, text: clean(o.text), selected: o.selected || null});
+        });
+      }
+      if (e.required) { field.required = true; }
+      if (e.disabled) { field.disabled = true; }
+      if (!visible(e)) { field.visible = false; }
+      out.push(compact(field));
+    }
+    return out;'
+}
+
+# Overview of the page: title, URL, headings, the beginning of its text and
+# its links.
+# usage: get_page_summary [max_text_chars] [max_links]
+get_page_summary() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var maxText = arguments[0], maxLinks = arguments[1];
+    var headings = [], links = [];
+    var hs = document.querySelectorAll("h1, h2, h3");
+    for (var i = 0; i < hs.length && headings.length < 30; i++) {
+      if (visible(hs[i]) && clean(hs[i].innerText)) {
+        headings.push({level: Number(hs[i].tagName.charAt(1)), text: clean(hs[i].innerText).slice(0, 120)});
+      }
+    }
+    var as = document.querySelectorAll("a[href]");
+    for (var j = 0; j < as.length && links.length < maxLinks; j++) {
+      if (visible(as[j]) && clean(as[j].innerText)) {
+        links.push({text: clean(as[j].innerText).slice(0, 80), href: as[j].href, selector: selector(as[j])});
+      }
+    }
+    var text = clean(document.body ? document.body.innerText : "");
+    return {
+      title: document.title,
+      url: location.href,
+      headings: headings,
+      text: text.slice(0, maxText),
+      textTruncated: text.length > maxText,
+      links: links,
+      linksTotal: as.length,
+      forms: document.forms.length,
+      fields: document.querySelectorAll("input:not([type=hidden]), select, textarea").length
+    };' "[${1:-2000}, ${2:-50}]"
+}
+
+# Everything about one element: tag, text, attributes, state and position.
+# usage: get_element_info "$element"
+get_element_info() {
+  _exec_json "${_INTROSPECTION_HELPERS}"'
+    var e = arguments[0], attributes = {}, r = e.getBoundingClientRect();
+    for (var i = 0; i < e.attributes.length; i++) {
+      attributes[e.attributes[i].name] = e.attributes[i].value;
+    }
+    if (e.type === "password") { delete attributes.value; }
+    return compact({
+      tag: e.tagName.toLowerCase(),
+      text: clean(e.innerText).slice(0, 500),
+      value: e.type === "password" || typeof e.value !== "string" ? null : e.value,
+      attributes: attributes,
+      displayed: visible(e),
+      enabled: !e.disabled,
+      checked: typeof e.checked === "boolean" ? e.checked : null,
+      rect: {x: Math.round(r.x), y: Math.round(r.y), width: Math.round(r.width), height: Math.round(r.height)},
+      children: e.children.length,
+      selector: selector(e)
+    });' "[$(_element_ref "$1")]"
 }

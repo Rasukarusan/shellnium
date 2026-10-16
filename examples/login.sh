@@ -80,7 +80,7 @@ save_cookies() {
 main() {
     local html_file
     html_file=$(_create_login_page)
-    trap "rm -f '$html_file'" EXIT
+    trap "rm -f '$html_file'; cleanup_driver" EXIT
 
     local url="file://${html_file}"
     echo "Navigating to ${url} ..."

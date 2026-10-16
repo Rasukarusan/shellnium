@@ -81,7 +81,7 @@ teardown() {
   [[ "$output" == *'main'* ]]
 }
 
-@test "find_element builds correct JSON payload with id" {
+@test "find_element expresses the id strategy as a css selector" {
   curl() {
     for arg in "$@"; do
       echo "$arg"
@@ -92,11 +92,11 @@ teardown() {
 
   find_element 'id' 'my-element'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using": "id"'* ]]
-  [[ "$output" == *'"value": "my-element"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": "[id=\"my-element\"]"'* ]]
 }
 
-@test "find_element builds correct JSON payload with name" {
+@test "find_element expresses the name strategy as a css selector" {
   curl() {
     for arg in "$@"; do
       echo "$arg"
@@ -107,8 +107,8 @@ teardown() {
 
   find_element 'name' 'username'
   run cat "$CURL_LOG"
-  [[ "$output" == *'"using": "name"'* ]]
-  [[ "$output" == *'"value": "username"'* ]]
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": "[name=\"username\"]"'* ]]
 }
 
 @test "find_element builds correct JSON payload with tag name" {
@@ -577,4 +577,759 @@ teardown() {
 
 @test "KEY_F12 has correct W3C value (U+E03C)" {
   [[ "$KEY_F12" == "$(printf '\xee\x80\xbc')" ]]
+}
+
+# =====================
+# Wait helpers
+# =====================
+
+@test "_compare_lt compares decimal numbers" {
+  _compare_lt 0.4 1
+  _compare_lt 0.2 0.5
+  ! _compare_lt 1 1
+  ! _compare_lt 1.2 1
+}
+
+@test "_add adds decimal numbers" {
+  [ "$(_add 0 0.2)" = "0.2" ]
+  [ "$(_add 0.8 0.2)" = "1" ]
+  [ "$(_add 9.5 0.5)" = "10" ]
+}
+
+@test "wait_for_element times out with an interval below one second" {
+  find_element() { return 1; }
+  sleep() { echo "slept" >> "${BATS_TEST_TMPDIR}/sleeps.log"; }
+
+  run wait_for_element 'id' 'never' 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+  [ "$(wc -l < "${BATS_TEST_TMPDIR}/sleeps.log")" -eq 4 ]
+}
+
+# =====================
+# zsh compatibility
+# =====================
+
+@test "responses with backslashes survive under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"line1\\nline2 \\\\ end\"}"; }
+    get_page_source
+  ' zsh "$SHELLNIUM_DIR"
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "line1" ]
+  [ "${lines[1]}" = 'line2 \ end' ]
+}
+
+@test "screenshot does not clobber PATH under zsh" {
+  command -v zsh >/dev/null 2>&1 || skip "zsh is not installed"
+
+  run zsh -c '
+    source "$1/lib/core.sh"
+    BASE_URL="http://localhost:9515/session/test"
+    curl() { printf "%s" "{\"value\":\"aGVsbG8=\"}"; }
+    screenshot "$2/shot.png" && element_screenshot elem "$2/element.png"
+    cat "$2/shot.png" "$2/element.png"
+  ' zsh "$SHELLNIUM_DIR" "$BATS_TEST_TMPDIR"
+  [ "$status" -eq 0 ]
+  [ "$output" = "hellohello" ]
+}
+
+# =====================
+# W3C protocol
+# =====================
+
+# Log every curl argument on its own line and answer with $MOCK_RESPONSE.
+_mock_curl() {
+  export MOCK_RESPONSE="$1"
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    echo "$MOCK_RESPONSE"
+  }
+  export -f curl
+}
+
+@test "find_element expresses the class name strategy as a css selector" {
+  _mock_curl '{"value": {"ELEMENT": "elem-class"}}'
+
+  find_element 'class name' 'btn-primary'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"using": "css selector"'* ]]
+  [[ "$output" == *'"value": ".btn-primary"'* ]]
+}
+
+@test "_locator escapes quotes and backslashes in id values" {
+  run _locator 'id' 'a"b\c'
+  [ "$(echo "$output" | jq -r '.value')" = '[id="a\"b\\c"]' ]
+}
+
+@test "_locator leaves W3C strategies untouched" {
+  run _locator 'xpath' '//div[@id="x"]'
+  [ "$(echo "$output" | jq -r '.using')" = 'xpath' ]
+  [ "$(echo "$output" | jq -r '.value')" = '//div[@id="x"]' ]
+}
+
+@test "find_element reads the id from a W3C element reference" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "w3c-elem"}}'
+
+  run find_element 'css selector' 'h1'
+  [ "$status" -eq 0 ]
+  [ "$output" = "w3c-elem" ]
+}
+
+@test "find_element still reads the id from a legacy ELEMENT reference" {
+  _mock_curl '{"value": {"ELEMENT": "legacy-elem"}}'
+
+  run find_element 'css selector' 'h1'
+  [ "$status" -eq 0 ]
+  [ "$output" = "legacy-elem" ]
+}
+
+@test "find_elements reads every id from W3C element references" {
+  _mock_curl '{"value": [{"element-6066-11e4-a52e-4f735466cecf": "a"}, {"element-6066-11e4-a52e-4f735466cecf": "b"}]}'
+
+  run find_elements 'css selector' 'li'
+  [ "$status" -eq 0 ]
+  [ "${lines[0]}" = "a" ]
+  [ "${lines[1]}" = "b" ]
+}
+
+@test "find_element fails on a W3C error response" {
+  _mock_curl '{"value": {"error": "no such element", "message": "Unable to locate element"}}'
+
+  run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no such element"* ]]
+}
+
+@test "get_active_element reads the id from a W3C element reference" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "active-elem"}}'
+
+  run get_active_element
+  [ "$output" = "active-elem" ]
+}
+
+@test "new_session sends W3C capabilities" {
+  _mock_curl '{"value": {"sessionId": "w3c-session", "capabilities": {}}}'
+
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"capabilities"'* ]]
+  [[ "$output" == *'"alwaysMatch"'* ]]
+  [[ "$output" == *'"goog:chromeOptions"'* ]]
+  [[ "$output" != *'"desiredCapabilities"'* ]]
+}
+
+@test "new_session reads the session id from a W3C response" {
+  _mock_curl '{"value": {"sessionId": "w3c-session", "capabilities": {}}}'
+
+  run new_session
+  [ "$status" -eq 0 ]
+  [ "$output" = "w3c-session" ]
+}
+
+@test "new_session still reads the session id from a legacy response" {
+  _mock_curl '{"sessionId": "legacy-session", "status": 0, "value": {}}'
+
+  run new_session
+  [ "$status" -eq 0 ]
+  [ "$output" = "legacy-session" ]
+}
+
+@test "new_session fails when the driver refuses the session" {
+  _mock_curl '{"value": {"error": "session not created", "message": "no chrome binary"}}'
+
+  run new_session
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"session not created"* ]]
+}
+
+@test "new_session passes extra arguments and the headless flag to the browser" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  SHELLNIUM_HEADLESS=true new_session --lang=es
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"--lang=es"'* ]]
+  [[ "$output" == *'"--headless=new"'* ]]
+}
+
+@test "send_keys sends the text field required by W3C" {
+  _mock_curl '{"value": null}'
+
+  send_keys 'elem-1' 'hello'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"text": "hello"'* ]]
+  [[ "$output" == *'/element/elem-1/value'* ]]
+}
+
+@test "send_alert_text sends the text field required by W3C" {
+  _mock_curl '{"value": null}'
+
+  send_alert_text 'hello'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"text": "hello"'* ]]
+  [[ "$output" == *'/alert/text'* ]]
+}
+
+@test "click sends an empty JSON object as body" {
+  _mock_curl '{"value": null}'
+
+  click 'elem-1'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'{}'* ]]
+  [[ "$output" == *'/element/elem-1/click'* ]]
+}
+
+@test "switch_to_window sends the W3C handle field" {
+  _mock_curl '{"value": null}'
+
+  switch_to_window 'window-1'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"handle":"window-1"'* ]]
+}
+
+@test "switch_to_frame sends an integer as a frame index" {
+  _mock_curl '{"value": null}'
+
+  switch_to_frame 2
+  run cat "$CURL_LOG"
+  [[ "$output" == *'{"id":2}'* ]]
+}
+
+@test "switch_to_frame sends an element as a W3C element reference" {
+  _mock_curl '{"value": null}'
+
+  switch_to_frame 'frame-elem'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"frame-elem"'* ]]
+  [[ "$output" == *'/frame'* ]]
+}
+
+@test "switch_to_frame falls back to the frame id or name attribute" {
+  # Switching to "my-frame" as an element reference fails, so the frame is
+  # looked up by its id/name attribute and switched to as an element.
+  curl() {
+    for arg in "$@"; do
+      echo "$arg"
+    done >> "$CURL_LOG"
+    if [[ "$*" == *'/element'* ]]; then
+      echo '{"value": {"element-6066-11e4-a52e-4f735466cecf": "found-frame"}}'
+    elif [[ "$*" == *'"my-frame"'* ]]; then
+      echo '{"value": {"error": "no such element", "message": "bad element"}}'
+    else
+      echo '{"value": null}'
+    fi
+  }
+  export -f curl
+
+  run switch_to_frame 'my-frame'
+  [ "$status" -eq 0 ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'[id=\"my-frame\"],[name=\"my-frame\"]'* ]]
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"found-frame"'* ]]
+}
+
+@test "mouse_move_to uses a W3C element reference as origin" {
+  _mock_curl '{"value": null}'
+
+  mouse_move_to 'elem-abc'
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf":"elem-abc"'* ]]
+}
+
+@test "get_attribute asks the browser for the live value of the attribute" {
+  _mock_curl '{"value": "typed text"}'
+
+  run get_attribute 'elem-1' 'value'
+  [ "$output" = "typed text" ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/execute/sync'* ]]
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf": "elem-1"'* ]]
+  [[ "$output" == *'"value"'* ]]
+}
+
+@test "get_dom_attribute uses the W3C attribute endpoint" {
+  _mock_curl '{"value": "initial"}'
+
+  run get_dom_attribute 'elem-1' 'value'
+  [ "$output" = "initial" ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/element/elem-1/attribute/value'* ]]
+}
+
+# =====================
+# Browser selection
+# =====================
+
+@test "new_session asks for chrome by default" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  unset SHELLNIUM_BROWSER
+  new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"browserName": "chrome"'* ]]
+  [[ "$output" != *'moz:firefoxOptions'* ]]
+}
+
+@test "new_session asks for firefox when SHELLNIUM_BROWSER=firefox" {
+  _mock_curl '{"value": {"sessionId": "s"}}'
+
+  SHELLNIUM_BROWSER=firefox new_session
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"browserName": "firefox"'* ]]
+  [[ "$output" == *'"moz:firefoxOptions"'* ]]
+  [[ "$output" != *'goog:chromeOptions'* ]]
+}
+
+@test "_firefox_capabilities adds -headless when SHELLNIUM_HEADLESS is enabled" {
+  SHELLNIUM_HEADLESS=true run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].args | index("-headless") != null')" = "true" ]
+
+  SHELLNIUM_HEADLESS="" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].args | index("-headless") != null')" = "false" ]
+}
+
+@test "_firefox_capabilities puts user arguments before the defaults" {
+  run _firefox_capabilities -width 800
+  [ "$(echo "$output" | jq -c '.capabilities.alwaysMatch["moz:firefoxOptions"].args[0:2]')" = '["-width","800"]' ]
+}
+
+@test "_firefox_capabilities includes binary only when SHELLNIUM_FIREFOX_BIN is set" {
+  SHELLNIUM_FIREFOX_BIN="/opt/firefox/firefox" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"].binary')" = "/opt/firefox/firefox" ]
+
+  SHELLNIUM_FIREFOX_BIN="" run _firefox_capabilities
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["moz:firefoxOptions"] | has("binary")')" = "false" ]
+}
+
+@test "_chrome_capabilities keeps arguments with spaces and quotes intact" {
+  run _chrome_capabilities '--user-agent=My "quoted" agent'
+  [ "$(echo "$output" | jq -r '.capabilities.alwaysMatch["goog:chromeOptions"].args[-1]')" = '--user-agent=My "quoted" agent' ]
+}
+
+@test "_json_array returns an empty list without arguments" {
+  run _json_array
+  [ "$output" = "[]" ]
+}
+
+# =====================
+# Exit codes
+# =====================
+
+@test "_check_error fails when the driver gives no response" {
+  run _check_error ""
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no response from the driver"* ]]
+}
+
+@test "_value prints the value of a successful response" {
+  run _value '{"value": "hello"}'
+  [ "$status" -eq 0 ]
+  [ "$output" = "hello" ]
+}
+
+@test "_value applies the given filter" {
+  run _value '{"value": {"handle": "w1"}}' '.value.handle'
+  [ "$output" = "w1" ]
+}
+
+@test "getters return 1 and print nothing but the error on a WebDriver error" {
+  _mock_curl '{"value": {"error": "invalid session id", "message": "gone"}}'
+
+  local fn
+  for fn in get_title get_current_url get_page_source get_window_handle get_window_handles get_all_cookies get_timeouts get_alert_text get_window_rect get_active_element; do
+    run "$fn"
+    [ "$status" -eq 1 ]
+    [ "$output" = "[shellnium] Error: invalid session id - gone" ]
+  done
+}
+
+@test "element getters return 1 on a WebDriver error" {
+  _mock_curl '{"value": {"error": "stale element reference", "message": "old"}}'
+
+  local fn
+  for fn in get_text get_tag_name get_rect is_element_enabled is_element_displayed; do
+    run "$fn" 'elem-1'
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"stale element reference"* ]]
+  done
+  run get_attribute 'elem-1' 'value'
+  [ "$status" -eq 1 ]
+  run get_property 'elem-1' 'value'
+  [ "$status" -eq 1 ]
+  run get_css_value 'elem-1' 'color'
+  [ "$status" -eq 1 ]
+}
+
+@test "getters return 1 when the driver is not reachable" {
+  curl() { return 7; }
+  export -f curl
+
+  run get_title
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no response from the driver"* ]]
+}
+
+@test "get_named_cookie returns 1 when the cookie does not exist" {
+  _mock_curl '{"value": {"error": "no such cookie", "message": "none"}}'
+
+  run get_named_cookie 'missing'
+  [ "$status" -eq 1 ]
+}
+
+@test "screenshot returns 1 and writes no file on a WebDriver error" {
+  _mock_curl '{"value": {"error": "invalid session id", "message": "gone"}}'
+
+  run screenshot "${BATS_TEST_TMPDIR}/shot.png"
+  [ "$status" -eq 1 ]
+  [ ! -e "${BATS_TEST_TMPDIR}/shot.png" ]
+}
+
+@test "perform_actions returns 1 on a WebDriver error" {
+  _mock_curl '{"value": {"error": "move target out of bounds", "message": "outside"}}'
+
+  run perform_actions '{"actions":[]}'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"move target out of bounds"* ]]
+}
+
+@test "delete_window and new_window report WebDriver errors" {
+  _mock_curl '{"value": {"error": "no such window", "message": "closed"}}'
+
+  run delete_window
+  [ "$status" -eq 1 ]
+  run new_window tab
+  [ "$status" -eq 1 ]
+}
+
+@test "getters still succeed on a normal response" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  run get_title
+  [ "$status" -eq 0 ]
+  [ "$output" = "Example Domain" ]
+}
+
+# =====================
+# wait_for_url_contains / wait_for_title_contains
+# =====================
+
+@test "wait_for_url_contains succeeds once the URL contains the text" {
+  get_current_url() { echo "https://example.com/dashboard?tab=1"; }
+  sleep() { :; }
+
+  run wait_for_url_contains "/dashboard?tab" 1 0.25
+  [ "$status" -eq 0 ]
+}
+
+@test "wait_for_url_contains treats the text literally and times out" {
+  get_current_url() { echo "https://example.com/login"; }
+  sleep() { :; }
+
+  run wait_for_url_contains "log.n" 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+}
+
+@test "wait_for_title_contains succeeds once the title contains the text" {
+  get_title() { echo "My Dashboard - App"; }
+  sleep() { :; }
+
+  run wait_for_title_contains "Dashboard" 1 0.25
+  [ "$status" -eq 0 ]
+}
+
+@test "wait_for_title_contains times out when the title never matches" {
+  get_title() { echo "Login"; }
+  sleep() { :; }
+
+  run wait_for_title_contains "Dashboard" 1 0.25
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Timeout"* ]]
+}
+
+# =====================
+# Assertions
+# =====================
+
+@test "assert_url passes on the exact URL and fails otherwise" {
+  get_current_url() { echo "https://example.com/dashboard"; }
+
+  run assert_url "https://example.com/dashboard"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
+
+  run assert_url "https://example.com/"
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"Assertion failed: URL is 'https://example.com/dashboard', expected 'https://example.com/'"* ]]
+}
+
+@test "assert_url_contains checks a part of the URL" {
+  get_current_url() { echo "https://example.com/dashboard"; }
+
+  run assert_url_contains "/dashboard"
+  [ "$status" -eq 0 ]
+  run assert_url_contains "/login"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_title and assert_title_contains check the page title" {
+  get_title() { echo "My Dashboard"; }
+
+  run assert_title "My Dashboard"
+  [ "$status" -eq 0 ]
+  run assert_title "Dashboard"
+  [ "$status" -eq 1 ]
+  run assert_title_contains "Dashboard"
+  [ "$status" -eq 0 ]
+  run assert_title_contains "Login"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_element_text and assert_element_text_contains check the text of an element" {
+  get_text() { echo "Order submitted successfully"; }
+
+  run assert_element_text 'elem-1' "Order submitted successfully"
+  [ "$status" -eq 0 ]
+  run assert_element_text 'elem-1' "Order"
+  [ "$status" -eq 1 ]
+  run assert_element_text_contains 'elem-1' "submitted"
+  [ "$status" -eq 0 ]
+  run assert_element_text_contains 'elem-1' "failed"
+  [ "$status" -eq 1 ]
+}
+
+@test "assert_element_exists and assert_element_not_exists" {
+  find_elements() { echo "elem-1"; }
+  run assert_element_exists 'css selector' '.success'
+  [ "$status" -eq 0 ]
+  run assert_element_not_exists 'css selector' '.success'
+  [ "$status" -eq 1 ]
+
+  find_elements() { return 0; }
+  run assert_element_exists 'css selector' '.success'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"no element matches (css selector: .success)"* ]]
+  run assert_element_not_exists 'css selector' '.success'
+  [ "$status" -eq 0 ]
+}
+
+@test "assertions fail when the browser cannot be asked" {
+  get_title() { return 1; }
+
+  run assert_title "anything"
+  [ "$status" -eq 1 ]
+}
+
+# =====================
+# Page introspection
+# =====================
+
+@test "_exec_json posts the script and prints its result as compact JSON" {
+  _mock_curl '{"value": [{"tag": "a", "text": "Home"}]}'
+
+  run _exec_json 'return 1' '[5]'
+  [ "$status" -eq 0 ]
+  [ "$output" = '[{"tag":"a","text":"Home"}]' ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'/execute/sync'* ]]
+  [[ "$output" == *'"script": "return 1"'* ]]
+}
+
+@test "_exec_json fails on a WebDriver error" {
+  _mock_curl '{"value": {"error": "javascript error", "message": "boom"}}'
+
+  run _exec_json 'throw 1'
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"javascript error"* ]]
+}
+
+@test "get_clickable_elements limits the number of elements" {
+  _mock_curl '{"value": []}'
+
+  get_clickable_elements 25
+  run cat "$CURL_LOG"
+  [[ "$output" == *"25"* ]]
+  [[ "$output" == *'querySelectorAll'* ]]
+}
+
+@test "get_element_info passes the element as a W3C reference" {
+  _mock_curl '{"value": {"tag": "h1"}}'
+
+  run get_element_info 'elem-9'
+  [ "$output" = '{"tag":"h1"}' ]
+  run cat "$CURL_LOG"
+  [[ "$output" == *'"element-6066-11e4-a52e-4f735466cecf": "elem-9"'* ]]
+}
+
+@test "get_form_fields and get_page_summary print the JSON the page returns" {
+  _mock_curl '{"value": {"title": "T", "links": []}}'
+
+  run get_page_summary
+  [ "$output" = '{"title":"T","links":[]}' ]
+  run get_form_fields
+  [ "$status" -eq 0 ]
+}
+
+# =====================
+# JSON output (SHELLNIUM_OUTPUT=json)
+# =====================
+
+@test "json: a getter wraps its value" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_OUTPUT=json run get_title
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true,"value":"Example Domain"}' ]
+}
+
+@test "json: a value that is an object stays an object" {
+  _mock_curl '{"value": {"x": 1, "y": 2, "width": 3, "height": 4}}'
+
+  SHELLNIUM_OUTPUT=json run get_rect 'elem-1'
+  [ "$(echo "$output" | jq -r '.value.width')" = "3" ]
+}
+
+@test "json: an action reports ok without a value" {
+  _mock_curl '{"value": null}'
+
+  SHELLNIUM_OUTPUT=json run click 'elem-1'
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true}' ]
+}
+
+@test "json: a WebDriver error is reported as an object and exit code 1" {
+  _mock_curl '{"value": {"error": "no such element", "message": "Unable to locate element"}}'
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [ "$output" = '{"ok":false,"error":"no such element","message":"Unable to locate element"}' ]
+}
+
+@test "json: find_element returns the element id as value" {
+  _mock_curl '{"value": {"element-6066-11e4-a52e-4f735466cecf": "elem-1"}}'
+
+  SHELLNIUM_OUTPUT=json run find_element 'css selector' 'h1'
+  [ "$output" = '{"ok":true,"value":"elem-1"}' ]
+}
+
+@test "json: find_elements returns a list, empty when nothing matches" {
+  _mock_curl '{"value": [{"element-6066-11e4-a52e-4f735466cecf": "a"}, {"ELEMENT": "b"}]}'
+  SHELLNIUM_OUTPUT=json run find_elements 'css selector' 'li'
+  [ "$output" = '{"ok":true,"value":["a","b"]}' ]
+
+  _mock_curl '{"value": []}'
+  SHELLNIUM_OUTPUT=json run find_elements 'css selector' 'li'
+  [ "$output" = '{"ok":true,"value":[]}' ]
+}
+
+@test "json: list getters return a list" {
+  _mock_curl '{"value": ["w1", "w2"]}'
+
+  SHELLNIUM_OUTPUT=json run get_window_handles
+  [ "$output" = '{"ok":true,"value":["w1","w2"]}' ]
+}
+
+@test "json: exec_script returns the script result as value" {
+  _mock_curl '{"value": 7}'
+
+  SHELLNIUM_OUTPUT=json run exec_script 'return 3 + 4'
+  [ "$output" = '{"ok":true,"value":7}' ]
+}
+
+@test "json: no response from the driver is an error object" {
+  curl() { return 7; }
+  export -f curl
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run get_title
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.ok')" = "false" ]
+  [ "$(echo "$output" | jq -r '.error')" = "no response" ]
+}
+
+@test "json: wait_for_element returns the element or a timeout error" {
+  sleep() { :; }
+  find_element() { echo "elem-1"; }
+  SHELLNIUM_OUTPUT=json run wait_for_element 'id' 'x' 1 0.25
+  [ "$output" = '{"ok":true,"value":"elem-1"}' ]
+
+  find_element() { return 1; }
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run wait_for_element 'id' 'x' 1 0.25
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.error')" = "timeout" ]
+}
+
+@test "json: waits read other functions in plain mode" {
+  sleep() { :; }
+  _mock_curl '{"value": "https://example.com/dashboard"}'
+
+  SHELLNIUM_OUTPUT=json run wait_for_url_contains '/dashboard' 1 0.25
+  [ "$status" -eq 0 ]
+  [ "$output" = '{"ok":true}' ]
+}
+
+@test "json: assertions report ok or an assertion error" {
+  _mock_curl '{"value": "Dashboard"}'
+
+  SHELLNIUM_OUTPUT=json run assert_title "Dashboard"
+  [ "$output" = '{"ok":true}' ]
+
+  SHELLNIUM_OUTPUT=json SHELLNIUM_LOG_LEVEL=none run assert_title "Login"
+  [ "$status" -eq 1 ]
+  [ "$(echo "$output" | jq -r '.error')" = "assertion failed" ]
+  [[ "$(echo "$output" | jq -r '.message')" == *"title is 'Dashboard', expected 'Login'"* ]]
+}
+
+@test "json: introspection results are wrapped too" {
+  _mock_curl '{"value": [{"tag": "a"}]}'
+
+  SHELLNIUM_OUTPUT=json run get_clickable_elements
+  [ "$output" = '{"ok":true,"value":[{"tag":"a"}]}' ]
+}
+
+@test "plain output is unchanged when SHELLNIUM_OUTPUT is not json" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_OUTPUT=text run get_title
+  [ "$output" = "Example Domain" ]
+  SHELLNIUM_OUTPUT=text run click 'elem-1'
+  [ -z "$output" ]
+}
+
+# =====================
+# Log levels
+# =====================
+
+@test "errors go to stderr by default" {
+  _mock_curl '{"value": {"error": "no such element", "message": "nope"}}'
+
+  local out err
+  out=$(find_element 'css selector' '.missing' 2>/dev/null) || true
+  err=$(find_element 'css selector' '.missing' 2>&1 >/dev/null) || true
+  [ -z "$out" ]
+  [ "$err" = "[shellnium] Error: no such element - nope" ]
+}
+
+@test "SHELLNIUM_LOG_LEVEL=none silences errors" {
+  _mock_curl '{"value": {"error": "no such element", "message": "nope"}}'
+
+  SHELLNIUM_LOG_LEVEL=none run find_element 'css selector' '.missing'
+  [ "$status" -eq 1 ]
+  [ -z "$output" ]
+}
+
+@test "SHELLNIUM_LOG_LEVEL=debug logs requests like SHELLNIUM_DEBUG=true" {
+  _mock_curl '{"value": "Example Domain"}'
+
+  SHELLNIUM_LOG_LEVEL=debug run get_title
+  [[ "$output" == *"[shellnium] GET "* ]]
+  SHELLNIUM_DEBUG=true run get_title
+  [[ "$output" == *"[shellnium] GET "* ]]
+  run get_title
+  [[ "$output" != *"[shellnium] GET "* ]]
 }

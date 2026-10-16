@@ -1,10 +1,38 @@
 #!/usr/bin/env bash
 
-# Auto-download and start ChromeDriver matching the installed Chrome version.
-# Downloaded binaries are cached in ~/.cache/shellnium/chromedriver-<version>/
+# Auto-download and start the driver of the selected browser:
+# ChromeDriver matching the installed Chrome version, or GeckoDriver for
+# Firefox (SHELLNIUM_BROWSER=firefox).
+# Downloaded binaries are cached in ~/.cache/shellnium/<driver>-<version>/
+
+# Progress messages go to stderr, unless SHELLNIUM_LOG_LEVEL is error or none.
+_setup_info() {
+  case "${SHELLNIUM_LOG_LEVEL:-info}" in
+    error|none) ;;
+    *)
+      # shellcheck disable=SC2059
+      printf "$@" >&2
+      ;;
+  esac
+}
+
+# curl flag for downloads: a progress bar, or nothing when messages are off.
+_setup_progress() {
+  case "${SHELLNIUM_LOG_LEVEL:-info}" in
+    error|none) echo "-s" ;;
+    *)          echo "--progress-bar" ;;
+  esac
+}
 
 SHELLNIUM_CACHE_DIR="${SHELLNIUM_CACHE_DIR:-${HOME}/.cache/shellnium}"
-SHELLNIUM_PORT="${SHELLNIUM_PORT:-9515}"
+SHELLNIUM_BROWSER="${SHELLNIUM_BROWSER:-chrome}"
+# Each driver keeps its usual port, so that a driver left running for one
+# browser is not mistaken for the other.
+if [ "$SHELLNIUM_BROWSER" = "firefox" ]; then
+  SHELLNIUM_PORT="${SHELLNIUM_PORT:-4444}"
+else
+  SHELLNIUM_PORT="${SHELLNIUM_PORT:-9515}"
+fi
 SHELLNIUM_CHROME_BIN=""
 
 _get_chrome_version() {
@@ -98,10 +126,10 @@ _download_chrome_headless_shell() {
 
   download_url="https://storage.googleapis.com/chrome-for-testing-public/${version}/${platform}/chrome-headless-shell-${platform}.zip"
 
-  printf "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform" >&2
+  _setup_info "Downloading chrome-headless-shell %s (%s) ...\n" "$version" "$platform"
 
   zip_file="${cache_dir}/chrome-headless-shell.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
+  if ! curl -fL "$(_setup_progress)" -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download chrome-headless-shell from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -137,7 +165,7 @@ _download_chrome_headless_shell() {
   fi
 
   SHELLNIUM_CHROME_BIN="${cache_dir}/chrome-headless-shell"
-  printf "chrome-headless-shell %s ready.\n" "$version" >&2
+  _setup_info "chrome-headless-shell %s ready.\n" "$version"
   echo "$version"
 }
 
@@ -169,7 +197,7 @@ _download_chromedriver() {
 
   mkdir -p "$cache_dir"
 
-  printf "Downloading ChromeDriver for Chrome %s ...\n" "$chrome_version" >&2
+  _setup_info "Downloading ChromeDriver for Chrome %s ...\n" "$chrome_version"
 
   if [ "$major" -ge 115 ]; then
     # Chrome for Testing API (Chrome 115+)
@@ -203,7 +231,7 @@ _download_chromedriver() {
   fi
 
   zip_file="${cache_dir}/chromedriver.zip"
-  if ! curl -fL --progress-bar -o "$zip_file" "$download_url" 2>&1; then
+  if ! curl -fL "$(_setup_progress)" -o "$zip_file" "$download_url" >&2; then
     printf "\e[35m[ERROR] Failed to download ChromeDriver from %s\e[m\n" "$download_url" >&2
     rm -f "$zip_file"
     return 1
@@ -234,7 +262,7 @@ _download_chromedriver() {
     return 1
   fi
 
-  printf "ChromeDriver %s ready.\n" "${driver_version:-$chrome_version}" >&2
+  _setup_info "ChromeDriver %s ready.\n" "${driver_version:-$chrome_version}"
   echo "${cache_dir}/chromedriver"
 }
 
@@ -251,6 +279,7 @@ setup_chromedriver() {
   fi
 
   export SHELLNIUM_DRIVER_URL="http://localhost:${SHELLNIUM_PORT}"
+  _SHELLNIUM_DRIVER_URL_IS_OURS=true
 
   # Already running? Nothing to do.
   if _is_chromedriver_running; then
@@ -264,7 +293,7 @@ setup_chromedriver() {
 
   if [ -z "$chrome_version" ]; then
     # No system Chrome found — auto-download chrome-headless-shell
-    printf "No system Chrome found. Auto-downloading chrome-headless-shell ...\n" >&2
+    _setup_info "No system Chrome found. Auto-downloading chrome-headless-shell ...\n"
     # NOTE: $() runs in a subshell, so SHELLNIUM_CHROME_BIN set inside
     # _download_chrome_headless_shell does not propagate. Reconstruct it here.
     chrome_version=$(_download_chrome_headless_shell) || return 1
@@ -313,5 +342,189 @@ cleanup_chromedriver() {
     kill "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
     wait "${SHELLNIUM_CHROMEDRIVER_PID}" 2>/dev/null
     unset SHELLNIUM_CHROMEDRIVER_PID
+  fi
+}
+
+##############################
+# Firefox / GeckoDriver
+##############################
+
+_get_firefox_bin() {
+  if [ -n "${SHELLNIUM_FIREFOX_BIN:-}" ]; then
+    echo "$SHELLNIUM_FIREFOX_BIN"
+  elif [ "$(uname)" = 'Darwin' ] && [ -x "/Applications/Firefox.app/Contents/MacOS/firefox" ]; then
+    echo "/Applications/Firefox.app/Contents/MacOS/firefox"
+  elif command -v firefox >/dev/null 2>&1; then
+    command -v firefox
+  elif command -v firefox-esr >/dev/null 2>&1; then
+    command -v firefox-esr
+  else
+    return 1
+  fi
+}
+
+# Platform name used in the GeckoDriver release assets.
+_get_geckodriver_platform() {
+  local os arch
+  os=$(uname -s)
+  arch=$(uname -m)
+
+  case "$os" in
+    Darwin)
+      case "$arch" in
+        arm64) echo "macos-aarch64" ;;
+        *)     echo "macos" ;;
+      esac
+      ;;
+    Linux)
+      case "$arch" in
+        aarch64|arm64) echo "linux-aarch64" ;;
+        i?86)          echo "linux32" ;;
+        *)             echo "linux64" ;;
+      esac
+      ;;
+    *)
+      printf "\e[35m[ERROR] Unsupported OS: %s\e[m\n" "$os" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Download GeckoDriver (the latest release, or SHELLNIUM_GECKODRIVER_VERSION).
+# Any GeckoDriver release drives every supported Firefox, so there is no
+# version to match.
+_download_geckodriver() {
+  local version platform cache_dir download_url archive
+
+  platform=$(_get_geckodriver_platform) || return 1
+
+  version="${SHELLNIUM_GECKODRIVER_VERSION:-}"
+  if [ -z "$version" ]; then
+    version=$(curl -sf "https://api.github.com/repos/mozilla/geckodriver/releases/latest" | jq -r '.tag_name // empty' 2>/dev/null)
+    if [ -z "$version" ]; then
+      printf "\e[35m[ERROR] Could not determine the latest GeckoDriver version.\e[m\n" >&2
+      return 1
+    fi
+  fi
+  version="v${version#v}"
+
+  cache_dir="${SHELLNIUM_CACHE_DIR}/geckodriver-${version}"
+
+  # Return cached binary if it exists
+  if [ -x "${cache_dir}/geckodriver" ]; then
+    echo "${cache_dir}/geckodriver"
+    return 0
+  fi
+
+  mkdir -p "$cache_dir"
+
+  download_url="https://github.com/mozilla/geckodriver/releases/download/${version}/geckodriver-${version}-${platform}.tar.gz"
+
+  _setup_info "Downloading GeckoDriver %s (%s) ...\n" "$version" "$platform"
+
+  archive="${cache_dir}/geckodriver.tar.gz"
+  if ! curl -fL "$(_setup_progress)" -o "$archive" "$download_url" >&2; then
+    printf "\e[35m[ERROR] Failed to download GeckoDriver from %s\e[m\n" "$download_url" >&2
+    rm -f "$archive"
+    return 1
+  fi
+
+  if ! tar -xzf "$archive" -C "$cache_dir" >/dev/null 2>&1; then
+    printf "\e[35m[ERROR] Failed to extract GeckoDriver.\e[m\n" >&2
+    rm -f "$archive"
+    return 1
+  fi
+
+  rm -f "$archive"
+  chmod +x "${cache_dir}/geckodriver" 2>/dev/null
+
+  if [ ! -x "${cache_dir}/geckodriver" ]; then
+    printf "\e[35m[ERROR] GeckoDriver binary not found after extraction.\e[m\n" >&2
+    return 1
+  fi
+
+  _setup_info "GeckoDriver %s ready.\n" "$version"
+  echo "${cache_dir}/geckodriver"
+}
+
+# Ensure geckodriver is available and running.
+# Sets SHELLNIUM_DRIVER_URL and SHELLNIUM_DRIVER_PID (if we started it).
+setup_geckodriver() {
+  # If user set a custom URL, assume they manage geckodriver themselves
+  if [ -n "${SHELLNIUM_DRIVER_URL:-}" ]; then
+    return 0
+  fi
+
+  export SHELLNIUM_DRIVER_URL="http://localhost:${SHELLNIUM_PORT}"
+  _SHELLNIUM_DRIVER_URL_IS_OURS=true
+
+  # Already running? Nothing to do.
+  if _is_driver_running; then
+    return 0
+  fi
+
+  if ! _get_firefox_bin >/dev/null; then
+    printf "\e[35m[ERROR] Firefox is not installed.\e[m\n" >&2
+    return 1
+  fi
+
+  # Use system geckodriver if there is one, otherwise auto-download
+  local geckodriver_bin
+  if command -v geckodriver >/dev/null 2>&1; then
+    geckodriver_bin="geckodriver"
+  else
+    geckodriver_bin=$(_download_geckodriver) || return 1
+  fi
+
+  # Start geckodriver in the background
+  "$geckodriver_bin" --port "$SHELLNIUM_PORT" >/dev/null 2>&1 &
+  SHELLNIUM_DRIVER_PID=$!
+  export SHELLNIUM_DRIVER_PID
+
+  # Wait for geckodriver to be ready
+  local _i
+  for _i in $(seq 1 50); do
+    if _is_driver_running; then
+      return 0
+    fi
+    sleep 0.1
+  done
+
+  printf "\e[35m[ERROR] GeckoDriver failed to start.\e[m\n" >&2
+  return 1
+}
+
+##############################
+# Any browser
+##############################
+
+_is_driver_running() {
+  curl -sf "http://localhost:${SHELLNIUM_PORT}/status" >/dev/null 2>&1
+}
+
+# Ensure the driver of the selected browser is available and running.
+setup_driver() {
+  case "$SHELLNIUM_BROWSER" in
+    chrome)  setup_chromedriver ;;
+    firefox) setup_geckodriver ;;
+    *)
+      printf "\e[35m[ERROR] Unsupported browser: %s (use chrome or firefox).\e[m\n" "$SHELLNIUM_BROWSER" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Stop the driver if we started it.
+cleanup_driver() {
+  cleanup_chromedriver
+  if [ -n "${SHELLNIUM_DRIVER_PID:-}" ]; then
+    kill "${SHELLNIUM_DRIVER_PID}" 2>/dev/null
+    wait "${SHELLNIUM_DRIVER_PID}" 2>/dev/null
+    unset SHELLNIUM_DRIVER_PID
+  fi
+  # Forget the URL we chose, so that a later start_session sets the driver
+  # up again instead of taking it for one managed by the user.
+  if [ "${_SHELLNIUM_DRIVER_URL_IS_OURS:-}" = true ]; then
+    unset SHELLNIUM_DRIVER_URL _SHELLNIUM_DRIVER_URL_IS_OURS
   fi
 }

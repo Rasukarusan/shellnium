@@ -58,9 +58,9 @@ cd shellnium
 - **curl**
 - **[jq](https://stedolan.github.io/jq/)**
 - **[unzip](https://infozip.sourceforge.net/UnZip.html)**
-- **Google Chrome** / **Chromium**
+- **Google Chrome** / **Chromium**, or **Firefox**
 
-ChromeDriver is **automatically downloaded and managed** by Shellnium. You don't need to install it manually.
+ChromeDriver (or GeckoDriver, for Firefox) is **automatically downloaded and managed** by Shellnium. You don't need to install it manually.
 
 #### Install dependencies
 
@@ -155,11 +155,16 @@ ChromeDriver is automatically downloaded to `~/.cache/shellnium/` and started on
 
 | Environment Variable | Default | Description |
 |---|---|---|
+| `SHELLNIUM_BROWSER` | `chrome` | Browser to drive: `chrome` or `firefox` |
 | `SHELLNIUM_HEADLESS` | (unset) | Set to `true` or `1` to enable headless mode (no visible browser window) |
-| `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom ChromeDriver URL (disables auto-setup) |
-| `SHELLNIUM_PORT` | `9515` | Port for auto-started ChromeDriver |
-| `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded ChromeDriver |
+| `SHELLNIUM_DRIVER_URL` | `http://localhost:9515` | Custom driver URL (disables auto-setup) |
+| `SHELLNIUM_PORT` | `9515` (`4444` for Firefox) | Port for the auto-started driver |
+| `SHELLNIUM_CACHE_DIR` | `~/.cache/shellnium` | Cache directory for downloaded drivers |
+| `SHELLNIUM_FIREFOX_BIN` | *(unset)* | Path to the Firefox binary, when it is not found automatically |
+| `SHELLNIUM_GECKODRIVER_VERSION` | *(latest)* | GeckoDriver version to download (e.g. `0.36.0`) |
 | `SHELLNIUM_DEBUG` | *(unset)* | Set to `true` to enable verbose debug logging |
+| `SHELLNIUM_LOG_LEVEL` | `info` | What is written to stderr: `debug`, `info`, `error` or `none` |
+| `SHELLNIUM_OUTPUT` | *(unset)* | Set to `json` to get every result as a JSON object |
 
 #### Debug Mode
 
@@ -170,6 +175,51 @@ SHELLNIUM_DEBUG=true bash demo.sh
 ```
 
 Debug output is written to stderr so it won't interfere with your script's normal output. WebDriver errors (e.g., element not found, stale element reference) are always surfaced to stderr regardless of debug mode.
+
+#### Session Control
+
+Sourcing `lib/selenium.sh` starts the driver and opens the browser right away. To load the functions only and decide later, pass `--no-init`:
+
+```bash
+source lib/selenium.sh --no-init   # load the library only
+start_session --headless           # start the driver and open the browser
+navigate_to 'https://example.com'
+end_session                        # close the browser and stop the driver
+```
+
+`start_session` takes the same browser arguments as `source lib/selenium.sh`, plus `--headless`, which works for any browser. Call it directly, not inside `$( )`. A script can open several sessions one after another.
+
+`source lib/selenium.sh --agent` is a shortcut for AI agents: headless mode, JSON output and only errors on stderr.
+
+#### Exit Codes and JSON Output
+
+Every function returns a non-zero exit code when the browser reports an error (element not found, session gone, script failed...), prints the error on stderr and nothing on stdout, so `$?`, `||` and `set -e` work as expected:
+
+```bash
+element=$(find_element 'id' 'submit') || echo "there is no submit button"
+```
+
+With `SHELLNIUM_OUTPUT=json` each function prints a single JSON object instead, which is easier to parse from other programs and AI agents. Exit codes stay the same.
+
+```bash
+export SHELLNIUM_OUTPUT=json
+get_title                          # {"ok":true,"value":"Example Domain"}
+click "$element"                   # {"ok":true}
+find_elements 'css selector' 'li'  # {"ok":true,"value":["id-1","id-2"]}
+find_element 'id' 'missing'        # {"ok":false,"error":"no such element","message":"..."}
+```
+
+Results always go to stdout and messages to stderr. `SHELLNIUM_LOG_LEVEL` chooses how much is written there: `debug` (every request and response), `info` (the default: errors and download progress), `error` or `none`.
+
+### Firefox
+
+Set `SHELLNIUM_BROWSER=firefox` to run the same script in Firefox. GeckoDriver is used from your `PATH` if it is there, and downloaded otherwise.
+
+```bash
+SHELLNIUM_BROWSER=firefox bash demo.sh
+```
+
+Arguments given when sourcing `selenium.sh` are passed to the selected browser, so they have to be ones it understands (e.g. `--lang=es` for Chrome, `-width 800` for Firefox).
 
 ### Headless Mode
 
@@ -233,6 +283,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Session
 
+- `start_session` / `end_session`
 - `is_ready`
 - `new_session`
 - `delete_session`
@@ -256,7 +307,7 @@ Shellnium provides the following methods. See [document](https://shellnium-site.
 
 ### Element State
 
-- `get_attribute` / `get_property` / `get_css_value`
+- `get_attribute` / `get_dom_attribute` / `get_property` / `get_css_value`
 - `get_text` / `get_tag_name` / `get_rect`
 - `is_element_enabled` / `is_element_displayed`
 
@@ -305,7 +356,37 @@ send_keys $element "${KEY_TAB}"           # Press Tab
 - `wait_for_clickable` — Wait until an element is displayed and enabled
 - `wait_for_text` — Wait until specific text appears in the page source
 - `wait_for_url` — Wait until the current URL matches a pattern
+- `wait_for_url_contains` — Wait until the current URL contains a string
+- `wait_for_title_contains` — Wait until the page title contains a string
 - `retry` — Retry any command up to N times with interval
+
+### Assertions
+
+Check that an action had the intended effect. They print nothing and return 0 when the check holds; otherwise they explain the difference on stderr and return 1.
+
+- `assert_url` / `assert_url_contains`
+- `assert_title` / `assert_title_contains`
+- `assert_element_text` / `assert_element_text_contains`
+- `assert_element_exists` / `assert_element_not_exists`
+
+```bash
+click "$submit"
+assert_url_contains '/dashboard' || exit 1
+```
+
+### Page Introspection
+
+Find out what is on a page without knowing its selectors beforehand. Every function prints JSON, and each element comes with a `selector` that `find_element 'css selector'` accepts.
+
+- `get_page_summary [max_text_chars] [max_links]` — title, URL, headings, the beginning of the text and the links
+- `get_clickable_elements [max_elements]` — visible links, buttons and other clickable elements
+- `get_form_fields` — form fields with their name, type, label, placeholder and options (password values are never included)
+- `get_element_info "$element"` — tag, text, attributes, state and position of one element
+
+```bash
+get_clickable_elements | jq -r '.[] | "\(.text)\t\(.selector)"'
+login=$(find_element 'css selector' "$(get_clickable_elements | jq -r '.[] | select(.text == "Log in") | .selector')")
+```
 
 ### Alerts
 
