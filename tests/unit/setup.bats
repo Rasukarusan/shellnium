@@ -267,3 +267,37 @@ setup() {
   run setup_chromedriver
   [ "$status" -eq 0 ]
 }
+
+@test "_download_chromedriver prints only the binary path on a fresh download" {
+  source "${SHELLNIUM_DIR}/lib/setup.sh"
+
+  SHELLNIUM_CACHE_DIR="${BATS_TEST_TMPDIR}/shellnium-cache"
+
+  # curl draws its progress bar on stderr; the legacy endpoint answers with
+  # the driver version.
+  curl() {
+    local out="" prev=""
+    for arg in "$@"; do
+      [ "$prev" = "-o" ] && out="$arg"
+      prev="$arg"
+    done
+    if [ -n "$out" ]; then
+      echo "######## 100.0%" >&2
+      touch "$out"
+    else
+      echo "100.0.4896.60"
+    fi
+  }
+  unzip() {
+    local dir="" prev=""
+    for arg in "$@"; do
+      [ "$prev" = "-d" ] && dir="$arg"
+      prev="$arg"
+    done
+    touch "${dir}/chromedriver"
+  }
+
+  local bin
+  bin=$(_download_chromedriver "100.0.4896.60" 2>/dev/null)
+  [ "$bin" = "${SHELLNIUM_CACHE_DIR}/chromedriver-100.0.4896.60/chromedriver" ]
+}
